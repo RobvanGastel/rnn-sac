@@ -1,4 +1,9 @@
 .DS_Store
+
 /results
+/data
+
 .ipynb_checkpoints
 .vscode
+
+

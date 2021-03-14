@@ -43,7 +43,7 @@ def maml_trpo_metaworld_ml1_push(ctxt, seed, epochs, rollouts_per_task,
     """
     set_seed(seed)
 
-    ml1 = metaworld.ML1('push-v1')
+    ml1 = metaworld.ML1('push-v2')
     tasks = MetaWorldTaskSampler(ml1, 'train')
     env = tasks.sample(1)[0]()
     test_sampler = SetTaskSampler(MetaWorldSetTaskEnv,

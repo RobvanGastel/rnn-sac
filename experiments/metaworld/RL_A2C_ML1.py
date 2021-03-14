@@ -26,9 +26,9 @@ from garage.trainer import TFTrainer
 @click.option('--n_epochs', default=10)
 @click.option('--episode_per_task', default=10)
 @wrap_experiment
-def rl2_ppo_metaworld_ml1_push(ctxt, seed, meta_batch_size, n_epochs,
+def rl2_a2c_metaworld_ml1_push(ctxt, seed, meta_batch_size, n_epochs,
                                episode_per_task):
-    """Train RL2 PPO with ML1 environment.
+    """Train RL2 SAC with ML1 environment.
 
     Args:
         ctxt (ExperimentContext): The experiment configuration used by
@@ -96,4 +96,4 @@ def rl2_ppo_metaworld_ml1_push(ctxt, seed, meta_batch_size, n_epochs,
                       env_spec.max_episode_length * meta_batch_size)
 
 
-rl2_ppo_metaworld_ml1_push()
+rl2_a2c_metaworld_ml1_push()
