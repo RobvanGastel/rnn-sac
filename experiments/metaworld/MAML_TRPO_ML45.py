@@ -29,7 +29,6 @@ from garage.trainer import Trainer
 def maml_trpo_metaworld_ml45(ctxt, seed, epochs, episodes_per_task,
                              meta_batch_size):
     """Set up environment and algorithm and run the task.
-
     Args:
         ctxt (ExperimentContext): The experiment configuration used by
             :class:`~Trainer` to create the :class:`~Snapshotter`.
@@ -39,7 +38,6 @@ def maml_trpo_metaworld_ml45(ctxt, seed, epochs, episodes_per_task,
         episodes_per_task (int): Number of episodes per epoch per task
             for training.
         meta_batch_size (int): Number of tasks sampled per batch.
-
     """
     set_seed(seed)
     ml45 = metaworld.ML45()
@@ -49,7 +47,7 @@ def maml_trpo_metaworld_ml45(ctxt, seed, epochs, episodes_per_task,
         return normalize(env, expected_action_scale=10.0)
 
     train_task_sampler = MetaWorldTaskSampler(ml45, 'train', wrap)
-    test_env = wrap(MetaWorldSetTaskEnv(ml45, 'test'), None)
+    test_env = wrap(MetaWorldSetTaskEnv(ml45, 'test'), wrap)
     test_task_sampler = SetTaskSampler(MetaWorldSetTaskEnv,
                                        env=test_env,
                                        wrapper=wrap)

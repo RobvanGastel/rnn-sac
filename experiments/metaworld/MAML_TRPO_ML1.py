@@ -81,7 +81,7 @@ def maml_trpo_metaworld_ml1_push(ctxt, seed, epochs, rollouts_per_task,
                     gae_lambda=1.,
                     inner_lr=0.1,
                     num_grad_updates=1,
-                    meta_evaluator=meta_evaluator
+                    meta_evaluator=meta_evaluator)
 
     trainer.setup(algo, env)
     trainer.train(n_epochs=epochs,
