@@ -5,8 +5,8 @@ import torch
 from torch.optim import Adam
 import gym
 import time
-import algo.core as core
-from algo.utils.logx import EpochLogger
+import core as core
+from utils.logx import EpochLogger
 
 """Original implementation by OpenAI SpinningUp
 https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/sac.py
@@ -360,7 +360,8 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='HalfCheetah-v2')
+    # parser.add_argument('--env', type=str, default='HalfCheetah-v2')
+    parser.add_argument('--env', type=str, default='BipedalWalker-v3')
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
@@ -369,12 +370,11 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='sac')
     args = parser.parse_args()
 
-    from spinup.utils.run_utils import setup_logger_kwargs
-    logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
+    # from spinup.utils.run_utils import setup_logger_kwargs
+    # logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     torch.set_num_threads(torch.get_num_threads())
 
     sac(lambda: gym.make(args.env), actor_critic=core.MLPActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l),
-        gamma=args.gamma, seed=args.seed, epochs=args.epochs,
-        logger_kwargs=logger_kwargs)
+        gamma=args.gamma, seed=args.seed, epochs=args.epochs)
