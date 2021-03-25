@@ -5,8 +5,8 @@ import torch
 from torch.optim import Adam
 import gym
 import time
-import core as core
-from utils.logx import EpochLogger
+import algo.core as core
+from algo.utils.logx import EpochLogger
 
 """Original implementation by OpenAI SpinningUp
 https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/sac.py
@@ -159,9 +159,11 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     env, test_env = env_fn(), env_fn()
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.shape[0]
+    # For discrete env, this should be measured
+    # act_dim = env.action_space.n
 
     # Action limit for clamping: critically, assumes all dimensions share the same bound!
-    act_limit = env.action_space.high[0]
+    # act_limit = env.action_space.high[0]
 
     # Create actor-critic module and target networks
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
