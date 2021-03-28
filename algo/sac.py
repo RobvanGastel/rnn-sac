@@ -48,7 +48,68 @@ class ReplayBuffer:
         return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in batch.items()}
 
 
-def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
+class ReplayBufferLSTM:
+    """
+    A simple FIFO experience replay buffer for meta-SAC agents.
+    From origin:
+    Replay buffer for agent with LSTM network additionally storing previous
+    action, initial input hidden state and output hidden state of LSTM.
+    And each sample contains the whole episode instead of a single step.
+    'hidden_in' and 'hidden_out' are only the initial hidden state for each
+    episode, for LSTM initialization.
+    """
+
+    def __init__(self, obs_dim, act_dim, size):
+        # TODO: Adjust these to hidden input size?
+        self.hidden_in_buf = np.zeros(core.combined_shape(
+            size, (2, 1, 1, 256)), dtype=np.float32)
+        self.hidden_out_buf = np.zeros(core.combined_shape(
+            size, (2, 1, 1, 256)), dtype=np.float32)
+
+        self.obs_buf = np.zeros(core.combined_shape(
+            size, obs_dim), dtype=np.float32)
+        self.obs2_buf = np.zeros(core.combined_shape(
+            size, obs_dim), dtype=np.float32)
+
+        self.act_buf = np.zeros(core.combined_shape(
+            size, act_dim), dtype=np.float32)
+        self.act2_buf = np.zeros(core.combined_shape(
+            size, act_dim), dtype=np.float32)
+
+        self.rew_buf = np.zeros(size, dtype=np.float32)
+        self.done_buf = np.zeros(size, dtype=np.float32)
+        self.ptr, self.size, self.max_size = 0, 0, size
+
+    def store(self, last_act, hidden_in, hidden_out, obs, act, rew,
+              next_obs, done):
+        self.hidden_in_buf[self.ptr] = torch.as_tensor((
+            hidden_in[0], hidden_in[1]))
+        self.hidden_out_buf[self.ptr] = torch.as_tensor((
+            hidden_out[0], hidden_out[1]))
+        self.act2_buf[self.ptr] = last_act
+
+        self.obs_buf[self.ptr] = obs
+        self.obs2_buf[self.ptr] = next_obs
+        self.act_buf[self.ptr] = act
+        self.rew_buf[self.ptr] = rew
+        self.done_buf[self.ptr] = done
+        self.ptr = (self.ptr+1) % self.max_size
+        self.size = min(self.size+1, self.max_size)
+
+    def sample_batch(self, batch_size=32):
+        idxs = np.random.randint(0, self.size, size=batch_size)
+        batch = dict(hidden_in=self.hidden_in_buf[idxs],
+                     hidden_out=self.hidden_out_buf[idxs],
+                     act2=self.act2_buf[idxs],
+                     obs=self.obs_buf[idxs],
+                     obs2=self.obs2_buf[idxs],
+                     act=self.act_buf[idxs],
+                     rew=self.rew_buf[idxs],
+                     done=self.done_buf[idxs])
+        return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in batch.items()}
+
+
+def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
         steps_per_epoch=4000, epochs=100, replay_size=int(1e6), gamma=0.99,
         polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=10000,
         update_after=1000, update_every=50, num_test_episodes=10, max_ep_len=1000,
@@ -61,23 +122,23 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         env_fn : A function which creates a copy of the environment.
             The environment must satisfy the OpenAI Gym API.
 
-        actor_critic: The constructor method for a PyTorch Module with an ``act`` 
+        actor_critic: The constructor method for a PyTorch Module with an ``act``
             method, a ``pi`` module, a ``q1`` module, and a ``q2`` module.
-            The ``act`` method and ``pi`` module should accept batches of 
-            observations as inputs, and ``q1`` and ``q2`` should accept a batch 
-            of observations and a batch of actions as inputs. When called, 
+            The ``act`` method and ``pi`` module should accept batches of
+            observations as inputs, and ``q1`` and ``q2`` should accept a batch
+            of observations and a batch of actions as inputs. When called,
             ``act``, ``q1``, and ``q2`` should return:
 
             ===========  ================  ======================================
             Call         Output Shape      Description
             ===========  ================  ======================================
-            ``act``      (batch, act_dim)  | Numpy array of actions for each 
+            ``act``      (batch, act_dim)  | Numpy array of actions for each
                                            | observation.
             ``q1``       (batch,)          | Tensor containing one current estimate
                                            | of Q* for the provided observations
                                            | and actions. (Critical: make sure to
                                            | flatten this!)
-            ``q2``       (batch,)          | Tensor containing the other current 
+            ``q2``       (batch,)          | Tensor containing the other current
                                            | estimate of Q* for the provided observations
                                            | and actions. (Critical: make sure to
                                            | flatten this!)
@@ -95,12 +156,12 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                                            | should be able to flow back into ``a``.
             ===========  ================  ======================================
 
-        ac_kwargs (dict): Any kwargs appropriate for the ActorCritic object 
+        ac_kwargs (dict): Any kwargs appropriate for the ActorCritic object
             you provided to SAC.
 
         seed (int): Seed for random number generators.
 
-        steps_per_epoch (int): Number of steps of interaction (state-action pairs) 
+        steps_per_epoch (int): Number of steps of interaction (state-action pairs)
             for the agent and the environment in each epoch.
 
         epochs (int): Number of epochs to run and train agent.
@@ -109,19 +170,19 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
         gamma (float): Discount factor. (Always between 0 and 1.)
 
-        polyak (float): Interpolation factor in polyak averaging for target 
-            networks. Target networks are updated towards main networks 
+        polyak (float): Interpolation factor in polyak averaging for target
+            networks. Target networks are updated towards main networks
             according to:
 
-            .. math:: \\theta_{\\text{targ}} \\leftarrow 
+            .. math:: \\theta_{\\text{targ}} \\leftarrow
                 \\rho \\theta_{\\text{targ}} + (1-\\rho) \\theta
 
-            where :math:`\\rho` is polyak. (Always between 0 and 1, usually 
+            where :math:`\\rho` is polyak. (Always between 0 and 1, usually
             close to 1.)
 
         lr (float): Learning rate (used for both policy and value learning).
 
-        alpha (float): Entropy regularization coefficient. (Equivalent to 
+        alpha (float): Entropy regularization coefficient. (Equivalent to
             inverse of reward scale in the original SAC paper.)
 
         batch_size (int): Minibatch size for SGD.
@@ -134,8 +195,8 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             is full enough for useful updates.
 
         update_every (int): Number of env interactions that should elapse
-            between gradient descent updates. Note: Regardless of how long 
-            you wait between updates, the ratio of env steps to gradient steps 
+            between gradient descent updates. Note: Regardless of how long
+            you wait between updates, the ratio of env steps to gradient steps
             is locked to 1.
 
         num_test_episodes (int): Number of episodes to test the deterministic
@@ -177,7 +238,7 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     q_params = itertools.chain(ac.q1.parameters(), ac.q2.parameters())
 
     # Experience buffer
-    replay_buffer = ReplayBuffer(
+    replay_buffer = ReplayBufferLSTM(
         obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
 
     # Count variables (protip: try to get a feel for how different size networks behave!)
@@ -188,10 +249,14 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     # Set up function for computing SAC Q-losses
     def compute_loss_q(data):
-        o, a, r, o2, d = data['obs'], data['act'], data['rew'], data['obs2'], data['done']
+        o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
+        a, a2 = data['act'], data['act2']
+        hid_in, hid_out = data['hidden_in'], data['hidden_out']
+        hid_in = (hid_in[0], hid_in[1])
+        hid_out = (hid_out[0], hid_out[1])
 
-        q1 = ac.q1(o, a)
-        q2 = ac.q2(o, a)
+        q1, _ = ac.q1(o, a, a2, hid_in)
+        q2, _ = ac.q2(o, a, a2, hid_in)
 
         # Bellman backup for Q functions
         with torch.no_grad():
@@ -199,8 +264,8 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             a2, logp_a2 = ac.pi(o2)
 
             # Target Q-values
-            q1_pi_targ = ac_targ.q1(o2, a2)
-            q2_pi_targ = ac_targ.q2(o2, a2)
+            q1_pi_targ = ac_targ.q1(o2, a2, a, hid_out)
+            q2_pi_targ = ac_targ.q2(o2, a2, a, hid_out)
             q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
             backup = r + gamma * (1 - d) * (q_pi_targ - alpha * logp_a2)
 
@@ -216,6 +281,7 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         return loss_q, q_info
 
     # Set up function for computing SAC pi loss
+    # TODO: Make recurrent
     def compute_loss_pi(data):
         o = data['obs']
         pi, logp_pi = ac.pi(o)
@@ -275,6 +341,7 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
                 p_targ.data.add_((1 - polyak) * p.data)
 
     def get_action(o, deterministic=False):
+        # TODO: Should also return hidden layers LSTM?
         return ac.act(torch.as_tensor(o, dtype=torch.float32),
                       deterministic)
 
@@ -293,14 +360,21 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
 
+    # Recurrent shape
+    hidden_out = (np.zeros([1, 1, 256], dtype=np.float),
+                  np.zeros([1, 1, 256], dtype=np.float))
+    print(hidden_out[0].shape)
+    a2 = env.action_space.sample()
+
     # Main loop: collect experience in env and update/log each epoch
     for t in range(total_steps):
+        hidden_in = hidden_out
 
         # Until start_steps have elapsed, randomly sample actions
         # from a uniform distribution for better exploration. Afterwards,
         # use the learned policy.
         if t > start_steps:
-            a = get_action(o)
+            a, hidden_out = get_action(o)
         else:
             a = env.action_space.sample()
 
@@ -315,11 +389,14 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
         d = False if ep_len == max_ep_len else d
 
         # Store experience to replay buffer
-        replay_buffer.store(o, a, r, o2, d)
+        # last_act, hidden_in, hidden_out, obs, act, rew,
+        #   next_obs, done
+        replay_buffer.store(a2, hidden_in, hidden_out, o, a, r, o2, d)
 
         # Super critical, easy to overlook step: make sure to update
         # most recent observation!
         o = o2
+        a2 = a
 
         # End of trajectory handling
         if d or (ep_len == max_ep_len):

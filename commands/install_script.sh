@@ -21,6 +21,11 @@ pip install -e .
 # In the correct dir
 pip install box2d-py
 
+# For meta-SAC
+pip install joblib
+Y | conda install -c anaconda mpi4py
+Y | conda install -c conda-forge seaborn==0.8.1
+
 # conda dependencies
 # Care for GPU cuda should also be installed,
 Y | conda install pytorch torchvision torchaudio -c pytorch
