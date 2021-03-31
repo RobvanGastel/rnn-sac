@@ -59,38 +59,43 @@ class ReplayBufferLSTM:
     episode, for LSTM initialization.
     """
 
+# hidden_dim
     def __init__(self, obs_dim, act_dim, size):
         # TODO: Adjust these to hidden input size?
-        self.hidden_in_buf = np.zeros(core.combined_shape(
-            size, (2, 1, 1, 256)), dtype=np.float32)
-        self.hidden_out_buf = np.zeros(core.combined_shape(
-            size, (2, 1, 1, 256)), dtype=np.float32)
+        self.hid_in_buf = np.zeros(core.combined_shape(
+            size, (1, 1, 256)), dtype=np.float32)
+        self.hid_in2_buf = np.zeros(core.combined_shape(
+            size, (1, 1, 256)), dtype=np.float32)
+
+        self.hid_out_buf = np.zeros(core.combined_shape(
+            size, (1, 1, 256)), dtype=np.float32)
+        self.hid_out2_buf = np.zeros(core.combined_shape(
+            size, (1, 1, 256)), dtype=np.float32)
 
         self.obs_buf = np.zeros(core.combined_shape(
             size, obs_dim), dtype=np.float32)
         self.obs2_buf = np.zeros(core.combined_shape(
             size, obs_dim), dtype=np.float32)
-
         self.act_buf = np.zeros(core.combined_shape(
             size, act_dim), dtype=np.float32)
         self.act2_buf = np.zeros(core.combined_shape(
             size, act_dim), dtype=np.float32)
-
         self.rew_buf = np.zeros(size, dtype=np.float32)
         self.done_buf = np.zeros(size, dtype=np.float32)
         self.ptr, self.size, self.max_size = 0, 0, size
 
     def store(self, last_act, hidden_in, hidden_out, obs, act, rew,
               next_obs, done):
-        self.hidden_in_buf[self.ptr] = torch.as_tensor((
-            hidden_in[0], hidden_in[1]))
-        self.hidden_out_buf[self.ptr] = torch.as_tensor((
-            hidden_out[0], hidden_out[1]))
-        self.act2_buf[self.ptr] = last_act
+        self.hid_in_buf[self.ptr] = hidden_in[0]
+        self.hid_in2_buf[self.ptr] = hidden_in[1]
+
+        self.hid_out_buf[self.ptr] = hidden_out[0]
+        self.hid_out2_buf[self.ptr] = hidden_out[1]
 
         self.obs_buf[self.ptr] = obs
         self.obs2_buf[self.ptr] = next_obs
         self.act_buf[self.ptr] = act
+        self.act2_buf[self.ptr] = last_act
         self.rew_buf[self.ptr] = rew
         self.done_buf[self.ptr] = done
         self.ptr = (self.ptr+1) % self.max_size
@@ -98,15 +103,29 @@ class ReplayBufferLSTM:
 
     def sample_batch(self, batch_size=32):
         idxs = np.random.randint(0, self.size, size=batch_size)
-        batch = dict(hidden_in=self.hidden_in_buf[idxs],
-                     hidden_out=self.hidden_out_buf[idxs],
+
+        # cat along the batch dim
+        hi_lst = torch.reshape(torch.Tensor(
+            self.hid_out_buf[idxs]), (1, batch_size, 256)).detach()
+        ho_lst = torch.reshape(torch.Tensor(
+            self.hid_out2_buf[idxs]), (1, batch_size, 256)).detach()
+        ci_lst = torch.reshape(torch.Tensor(
+            self.hid_in_buf[idxs]), (1, batch_size, 256)).detach()
+        co_lst = torch.reshape(torch.Tensor(
+            self.hid_in2_buf[idxs]), (1, batch_size, 256)).detach()
+
+        hidden_in = (hi_lst, ci_lst)
+        hidden_out = (ho_lst, co_lst)
+
+        batch = dict(hidden_in=hidden_in,
+                     hidden_out=hidden_out,
                      act2=self.act2_buf[idxs],
                      obs=self.obs_buf[idxs],
                      obs2=self.obs2_buf[idxs],
                      act=self.act_buf[idxs],
                      rew=self.rew_buf[idxs],
                      done=self.done_buf[idxs])
-        return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in batch.items()}
+        return {k: torch.as_tensor(v, dtype=torch.float32) if type(v) != tuple else v for k, v in batch.items()}
 
 
 def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
@@ -252,8 +271,11 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
         o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
         a, a2 = data['act'], data['act2']
         hid_in, hid_out = data['hidden_in'], data['hidden_out']
-        hid_in = (hid_in[0], hid_in[1])
-        hid_out = (hid_out[0], hid_out[1])
+        print(hid_in[0].shape, hid_in[1].shape)
+        # print("before unsqueeze:", hid_in[0].shape)
+
+        # hid_in = (torch.squeeze(hid_in[0], 0), torch.squeeze(hid_in[1], 0))
+        # print("after unsqueeze:", hid_in[0].shape)
 
         q1, _ = ac.q1(o, a, a2, hid_in)
         q2, _ = ac.q2(o, a, a2, hid_in)
@@ -363,7 +385,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
     # Recurrent shape
     hidden_out = (np.zeros([1, 1, 256], dtype=np.float),
                   np.zeros([1, 1, 256], dtype=np.float))
-    print(hidden_out[0].shape)
     a2 = env.action_space.sample()
 
     # Main loop: collect experience in env and update/log each epoch

@@ -170,13 +170,17 @@ class RNNQFunction(nn.Module):
         output shape: (batch_size, sequence_length, 1)
         for lstm needs to be permuted as: (sequence_length, batch_size, state_dim)
         """
-        # print(obs.shape, action.shape, last_action.shape, hidden_in[0].shape)
+        print(obs.shape)
+        # obs = obs.permute(1, 0, 2)
+        # action = action.permute(1, 0, 2)
+        # last_action = last_action.permute(1, 0, 2)
+
         obs = torch.unsqueeze(obs, 0).permute(1, 0, 2)
         action = torch.unsqueeze(action, 0).permute(1, 0, 2)
         last_action = torch.unsqueeze(last_action, 0).permute(1, 0, 2)
+
         # branch 1
         fc_branch = torch.cat([obs, action], -1)
-        print(fc_branch.shape)
         fc_branch = self.activation(self.linear1(fc_branch))
         # branch 2
         lstm_branch = torch.cat([obs, last_action], -1)
