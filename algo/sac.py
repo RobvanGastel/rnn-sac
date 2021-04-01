@@ -45,7 +45,8 @@ class ReplayBuffer:
                      act=self.act_buf[idxs],
                      rew=self.rew_buf[idxs],
                      done=self.done_buf[idxs])
-        return {k: torch.as_tensor(v, dtype=torch.float32) for k, v in batch.items()}
+        return {k: torch.as_tensor(v, dtype=torch.float32)
+                for k, v in batch.items()}
 
 
 class ReplayBufferLSTM:
@@ -59,12 +60,15 @@ class ReplayBufferLSTM:
     episode, for LSTM initialization.
     """
 
-    def __init__(self, obs_dim, act_dim, size, max_ep_len):
-        # TODO: Solve 17 hardcoded
+    def __init__(self, obs_dim, act_dim, hidden_dim, size, max_ep_len):
+        self.hid_in_buf = np.zeros((size, 2, hidden_dim), dtype=np.float32)
+        self.hid_out_buf = np.zeros((size, 2, hidden_dim), dtype=np.float32)
+
+        # TODO: Careful as the obs_dim is assumed to be 1D
         self.obs_buf = np.zeros((
-            size, max_ep_len, 17), dtype=np.float32)
+            size, max_ep_len, obs_dim[0]), dtype=np.float32)
         self.obs2_buf = np.zeros((
-            size, max_ep_len, 17), dtype=np.float32)
+            size, max_ep_len, obs_dim[0]), dtype=np.float32)
         self.act_buf = np.zeros((
             size, max_ep_len, act_dim), dtype=np.float32)
         self.act2_buf = np.zeros((
@@ -77,7 +81,9 @@ class ReplayBufferLSTM:
         self.ptr, self.size, self.max_size = 0, 0, size
 
     def store(self, last_act, obs, act, rew,
-              next_obs, done):
+              next_obs, hid_in, hid_out, done):
+        self.hid_in_buf[self.ptr] = hid_in
+        self.hid_out_buf[self.ptr] = hid_out
 
         self.obs_buf[self.ptr] = obs
         self.obs2_buf[self.ptr] = next_obs
@@ -92,20 +98,23 @@ class ReplayBufferLSTM:
         idxs = np.random.randint(0, self.size, size=batch_size)
 
         batch = dict(
+            hid_in=self.hid_in_buf[idxs],
+            hid_out=self.hid_out_buf[idxs],
             act2=self.act2_buf[idxs],
             obs=self.obs_buf[idxs],
             obs2=self.obs2_buf[idxs],
             act=self.act_buf[idxs],
             rew=self.rew_buf[idxs],
             done=self.done_buf[idxs])
-        return {k: torch.as_tensor(v, dtype=torch.float32) if type(v) != tuple else v for k, v in batch.items()}
+        return {k: torch.as_tensor(v, dtype=torch.float32)
+                if type(v) != tuple else v for k, v in batch.items()}
 
 
 def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
         steps_per_epoch=4000, epochs=100, replay_size=int(1e3), gamma=0.99,
         polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=10000,
-        update_after=1000, update_every=50, num_test_episodes=10, max_ep_len=1000,
-        logger_kwargs=dict(), save_freq=1):
+        update_after=1000, update_every=50, num_test_episodes=10,
+        max_ep_len=1000, logger_kwargs=dict(), save_freq=1):
     """
     Soft Actor-Critic (SAC)
 
@@ -215,14 +224,16 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
     # For discrete env, this should be measured
     # act_dim = env.action_space.n
 
-    # Action limit for clamping: critically, assumes all dimensions share the same bound!
+    # Action limit for clamping: critically, assumes all dimensions share
+    # the same bound!
     # act_limit = env.action_space.high[0]
 
     # Create actor-critic module and target networks
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
     ac_targ = deepcopy(ac)
 
-    # Freeze target networks with respect to optimizers (only update via polyak averaging)
+    # Freeze target networks with respect to optimizers (only update via
+    # polyak averaging)
     for p in ac_targ.parameters():
         p.requires_grad = False
 
@@ -231,37 +242,40 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
 
     # Experience buffer
     replay_buffer = ReplayBufferLSTM(
-        obs_dim=obs_dim, act_dim=act_dim, size=replay_size, max_ep_len=max_ep_len)
+        obs_dim=obs_dim, act_dim=act_dim, hidden_dim=256,
+        size=replay_size, max_ep_len=max_ep_len)
 
-    # Count variables (protip: try to get a feel for how different size networks behave!)
+    # Count variables (protip: try to get a feel for how different size
+    # networks behave!)
     var_counts = tuple(core.count_vars(module)
                        for module in [ac.pi, ac.q1, ac.q2])
     logger.log(
-        '\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
+        '\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n'
+        % var_counts)
 
     # Set up function for computing SAC Q-losses
     def compute_loss_q(data):
         o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
         a, a2 = data['act'], data['act2']
+        hid_in, hid_out = data['hid_in'], data['hid_out']
 
         d = torch.unsqueeze(d, -1)
         r = torch.unsqueeze(r, -1)
 
-        q1 = ac.q1(o, a, a2)
-        q2 = ac.q2(o, a, a2)
+        q1, _ = ac.q1(o, a, a2, hid_in)
+        q2, _ = ac.q2(o, a, a2, hid_in)
 
         # Bellman backup for Q functions
         with torch.no_grad():
             # Target actions come from *current* policy
-            a2, logp_a2 = ac.pi(o2)
+            a2, logp_a2, _ = ac.pi(o2, a, hid_out)
 
             # Target Q-values
-            q1_pi_targ = ac_targ.q1(o2, a2, a)
-            q2_pi_targ = ac_targ.q2(o2, a2, a)
+            # Careful, hiden are tuples (a, b)
+            q1_pi_targ, _ = ac_targ.q1(o2, a2, a, hid_out)
+            q2_pi_targ, _ = ac_targ.q2(o2, a2, a, hid_out)
             q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ) - alpha * logp_a2
-            print(q_pi_targ.shape, logp_a2.shape)
-            print(r.shape)
-            print(d.shape)
+
             backup = r + gamma * (1 - d) * (q_pi_targ)
 
         # MSE loss against Bellman backup
@@ -280,10 +294,11 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
     def compute_loss_pi(data):
         o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
         a, a2 = data['act'], data['act2']
+        hid_in, hid_out = data['hid_in'], data['hid_out']
 
-        pi, logp_pi = ac.pi(o)
-        q1_pi = ac.q1(o, pi, a2)
-        q2_pi = ac.q2(o, pi, a2)
+        pi, logp_pi, _ = ac.pi(o, a2, hid_in)
+        q1_pi, _ = ac.q1(o, pi, a2, hid_in)
+        q2_pi, _ = ac.q2(o, pi, a2, hid_in)
         q_pi = torch.min(q1_pi, q2_pi)
 
         # Entropy-regularized policy loss
@@ -332,8 +347,9 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
         # Finally, update target networks by polyak averaging.
         with torch.no_grad():
             for p, p_targ in zip(ac.parameters(), ac_targ.parameters()):
-                # NB: We use an in-place operations "mul_", "add_" to update target
-                # params, as opposed to "mul" and "add", which would make new tensors.
+                # NB: We use an in-place operations "mul_", "add_" to
+                # update target params, as opposed to "mul" and "add",
+                # which would make new tensors.
                 p_targ.data.mul_(polyak)
                 p_targ.data.add_((1 - polyak) * p.data)
 
@@ -366,19 +382,20 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
     o, ep_ret, ep_len = env.reset(), 0, 0
 
     # Recurrent shape
-    # hidden_out = (np.zeros([1, 1, 256], dtype=np.float),
-    #               np.zeros([1, 1, 256], dtype=np.float))
+    hidden_out = (np.zeros([1, 1, 256], dtype=np.float),
+                  np.zeros([1, 1, 256], dtype=np.float))
     a2 = env.action_space.sample()
 
     # Main loop: collect experience in env and update/log each epoch
     for t in range(total_steps):
-        # hidden_in = hidden_out
+        # Set hidden_in
+        hidden_in = hidden_out
 
         # Until start_steps have elapsed, randomly sample actions
         # from a uniform distribution for better exploration. Afterwards,
         # use the learned policy.
         if t > start_steps:
-            a, _ = get_action(o)
+            a, hidden_out = get_action(o, a2, hidden_in)
         else:
             a = env.action_space.sample()
 
@@ -392,6 +409,9 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
         # that isn't based on the agent's state)
         d = False if ep_len == max_ep_len else d
 
+        if t == 0:
+            init_hid_in = hidden_in
+            init_hid_out = hidden_out
         # Episodic replay buffer
         e_a.append(a)
         e_a2.append(a2)
@@ -415,16 +435,10 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
             e_d = np.asarray(e_d)
             e_r = np.asarray(e_r)
 
-            # last_act, hidden_in, hidden_out, obs, act, rew,
-            # next_obs, done
-            replay_buffer.store(e_a2, e_o, e_a, e_r, e_o2, e_d)
+            replay_buffer.store(e_a2, e_o, e_a, e_r, e_o2,
+                                init_hid_in, init_hid_out, e_d)
 
-            e_a = []
-            e_a2 = []
-            e_o = []
-            e_o2 = []
-            e_d = []
-            e_r = []
+            e_a, e_a2, e_o, e_o2, e_d, e_r = [], [], [], [], [], []
 
             logger.store(EpRet=ep_ret, EpLen=ep_len)
             o, ep_ret, ep_len = env.reset(), 0, 0

@@ -85,8 +85,8 @@ class MLPQFunction(nn.Module):
 
 class MLPActorCritic(nn.Module):
 
-    def __init__(self, observation_space, action_space, hidden_sizes=(256, 256),
-                 activation=nn.ReLU):
+    def __init__(self, observation_space, action_space,
+                 hidden_sizes=(256, 256), activation=nn.ReLU):
         super().__init__()
 
         obs_dim = observation_space.shape[0]
@@ -107,18 +107,50 @@ class MLPActorCritic(nn.Module):
 
 class RNNActor(nn.Module):
 
-    def __init__(self, obs_dim, act_dim, hidden_sizes, activation, act_limit):
+    def __init__(self, obs_dim, act_dim, hidden_size, activation, act_limit):
         super().__init__()
-        self.net = mlp([obs_dim] + list(hidden_sizes), activation, activation)
-        self.mu_layer = nn.Linear(hidden_sizes[-1], act_dim)
-        self.log_std_layer = nn.Linear(hidden_sizes[-1], act_dim)
+
+        self.linear1 = nn.Linear(obs_dim, hidden_size)
+        self.linear2 = nn.Linear(obs_dim+act_dim, hidden_size)
+
+        self.lstm1 = nn.LSTM(hidden_size, hidden_size)
+
+        self.linear3 = nn.Linear(2*hidden_size, hidden_size)
+        self.linear4 = nn.Linear(hidden_size, hidden_size)
+
+        # Note, hidden_sizes
+        # self.net = mlp([obs_dim] + list(hidden_sizes),
+        # activation, activation)
+        self.activation = activation
+
+        self.mu_layer = nn.Linear(hidden_size, act_dim)
+        self.log_std_layer = nn.Linear(hidden_size, act_dim)
         self.act_limit = act_limit
 
-    def forward(self, obs, deterministic=False, with_logprob=False):
+    def forward(self, obs, last_action, hidden_in,
+                deterministic=False, with_logprob=False):
+        hidden_in = hidden_in.permute(1, 0, 2)
+        hidden_in = (torch.unsqueeze(
+            hidden_in[0], 0), torch.unsqueeze(hidden_in[1], 0))
 
         obs = obs.permute(1, 0, 2)
-        net_out = self.net(obs)
-        net_out = net_out.permute(1, 0, 2)
+        last_action = last_action.permute(1, 0, 2)
+
+        # Network propogation
+        fc_branch = F.relu(self.linear1(obs))
+
+        lstm_branch = torch.cat([obs, last_action], -1)
+        lstm_branch = F.relu(self.linear2(lstm_branch))
+        lstm_branch, lstm_hidden = self.lstm1(lstm_branch, hidden_in)
+        # TODO: Should input this, hidden_in
+        # (h_0, c_0)
+
+        merged_branch = torch.cat([fc_branch, lstm_branch], -1)
+
+        x = self.activation(self.linear3(merged_branch))
+        x = self.linear4(x)
+        net_out = x.permute(1, 0, 2)  # back to same axes as input
+        # lstm_hidden is actually tuple: (hidden, cell)
 
         mu = self.mu_layer(net_out)
         log_std = self.log_std_layer(net_out)
@@ -135,34 +167,7 @@ class RNNActor(nn.Module):
         log_prob = Normal(mu, std).log_prob(mu + std * z)
         - torch.log(1. - action_0.pow(2) + epsilon) - np.log(10)
         log_prob = log_prob.sum(dim=-1, keepdims=True)
-        return action, log_prob
-
-        # Pre-squash distribution and sample
-        # pi_distribution = Normal(mu, std)
-        # if deterministic:
-        #     # Only used for evaluating policy at test time.
-        #     pi_action = mu
-        # else:
-        #     pi_action = pi_distribution.rsample()
-
-        # if with_logprob:
-        #     print(pi_distribution)
-        #     print(pi_action.shape)
-        #     # Compute logprob from Gaussian, and then apply correction for Tanh squashing.
-        #     # NOTE: The correction formula is a little bit magic. To get an understanding
-        #     # of where it comes from, check out the original SAC paper (arXiv 1801.01290)
-        #     # and look in appendix C. This is a more numerically-stable equivalent to Eq 21.
-        #     # Try deriving it yourself as a (very difficult) exercise. :)
-        #     logp_pi = pi_distribution.log_prob(pi_action).sum(axis=-1)
-        #     logp_pi -= (2*(np.log(2) - pi_action -
-        #                 F.softplus(-2*pi_action))).sum(axis=1)
-        # else:
-        #     logp_pi = None
-
-        # pi_action = torch.tanh(pi_action)
-        # pi_action = self.act_limit * pi_action
-
-        # return pi_action, logp_pi
+        return action, log_prob, lstm_hidden
 
 
 class RNNQFunction(nn.Module):
@@ -183,20 +188,20 @@ class RNNQFunction(nn.Module):
     def reset_lstm():
         return NotImplementedError
 
-    def forward(self, obs, action, last_action):
+    def forward(self, obs, action, last_action, hidden_in):
         """ 
         obs shape: (batch_size, sequence_length, state_dim)
         output shape: (batch_size, sequence_length, 1)
-        for lstm needs to be permuted as: (sequence_length, batch_size, state_dim)
+        for lstm needs to be permuted as: (sequence_length, batch_size, 
+        state_dim)
         """
-        print(obs.shape)
+        hidden_in = hidden_in.permute(1, 0, 2)
+        hidden_in = (torch.unsqueeze(
+            hidden_in[0], 0), torch.unsqueeze(hidden_in[1], 0))
+
         obs = obs.permute(1, 0, 2)
         action = action.permute(1, 0, 2)
         last_action = last_action.permute(1, 0, 2)
-
-        # obs = torch.unsqueeze(obs, 0).permute(1, 0, 2)
-        # action = torch.unsqueeze(action, 0).permute(1, 0, 2)
-        # last_action = torch.unsqueeze(last_action, 0).permute(1, 0, 2)
 
         # branch 1
         fc_branch = torch.cat([obs, action], -1)
@@ -208,7 +213,7 @@ class RNNQFunction(nn.Module):
         # lstm_branch, lstm_hidden = self.lstm1(
         # lstm_branch, hidden_in)  # no activation after lstm
         lstm_branch, lstm_hidden = self.lstm1(
-            lstm_branch)  # no activation after lstm
+            lstm_branch, hidden_in)  # no activation after lstm
 
         # merged
         merged_branch = torch.cat([fc_branch, lstm_branch], -1)
@@ -217,13 +222,13 @@ class RNNQFunction(nn.Module):
         x = self.linear4(x)
         x = x.permute(1, 0, 2)  # back to same axes as input
         # lstm_hidden is actually tuple: (hidden, cell)
-        return x
+        return x, lstm_hidden
 
 
 class RNNActorCritic(nn.Module):
 
-    def __init__(self, observation_space, action_space, hidden_sizes=(256, 256),
-                 activation=nn.Tanh):
+    def __init__(self, observation_space, action_space,
+                 hidden_size=256, activation=nn.Tanh()):
         super().__init__()
 
         obs_dim = observation_space.shape[0]
@@ -232,14 +237,14 @@ class RNNActorCritic(nn.Module):
 
         # build policy and value functions
         # TODO: Refactor policy Pi, RNNActor to be recurrent
-        self.pi = RNNActor(obs_dim, act_dim, hidden_sizes,
+        self.pi = RNNActor(obs_dim, act_dim, hidden_size,
                            activation, act_limit)
         self.q1 = RNNQFunction(
-            obs_dim, act_dim, hidden_sizes[0], activation=nn.Tanh())
+            obs_dim, act_dim, hidden_size, activation=activation)
         self.q2 = RNNQFunction(
-            obs_dim, act_dim, hidden_sizes[0], activation=nn.Tanh())
+            obs_dim, act_dim, hidden_size, activation=activation)
 
     def act(self, obs, deterministic=False):
         with torch.no_grad():
-            a, _ = self.pi(obs, deterministic, False)
+            a, _, _ = self.pi(obs, deterministic, False)
             return a.numpy()
