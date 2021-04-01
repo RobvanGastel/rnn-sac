@@ -1,9 +1,10 @@
 import gym
 import torch
 
-from ...algo import algo
-from algo import sac as algo
-
+# from algo import sac as algo
+# import algo.core
+import algo.sac as algo
+import algo.core as core
 
 if __name__ == "__main__":
     env = gym.make('BipedalWalker-v3')

@@ -59,38 +59,25 @@ class ReplayBufferLSTM:
     episode, for LSTM initialization.
     """
 
-# hidden_dim
-    def __init__(self, obs_dim, act_dim, size):
-        # TODO: Adjust these to hidden input size?
-        self.hid_in_buf = np.zeros(core.combined_shape(
-            size, (1, 1, 256)), dtype=np.float32)
-        self.hid_in2_buf = np.zeros(core.combined_shape(
-            size, (1, 1, 256)), dtype=np.float32)
+    def __init__(self, obs_dim, act_dim, size, max_ep_len):
+        # TODO: Solve 17 hardcoded
+        self.obs_buf = np.zeros((
+            size, max_ep_len, 17), dtype=np.float32)
+        self.obs2_buf = np.zeros((
+            size, max_ep_len, 17), dtype=np.float32)
+        self.act_buf = np.zeros((
+            size, max_ep_len, act_dim), dtype=np.float32)
+        self.act2_buf = np.zeros((
+            size, max_ep_len, act_dim), dtype=np.float32)
+        self.rew_buf = np.zeros((
+            size, max_ep_len), dtype=np.float32)
+        self.done_buf = np.zeros((
+            size, max_ep_len), dtype=np.float32)
 
-        self.hid_out_buf = np.zeros(core.combined_shape(
-            size, (1, 1, 256)), dtype=np.float32)
-        self.hid_out2_buf = np.zeros(core.combined_shape(
-            size, (1, 1, 256)), dtype=np.float32)
-
-        self.obs_buf = np.zeros(core.combined_shape(
-            size, obs_dim), dtype=np.float32)
-        self.obs2_buf = np.zeros(core.combined_shape(
-            size, obs_dim), dtype=np.float32)
-        self.act_buf = np.zeros(core.combined_shape(
-            size, act_dim), dtype=np.float32)
-        self.act2_buf = np.zeros(core.combined_shape(
-            size, act_dim), dtype=np.float32)
-        self.rew_buf = np.zeros(size, dtype=np.float32)
-        self.done_buf = np.zeros(size, dtype=np.float32)
         self.ptr, self.size, self.max_size = 0, 0, size
 
-    def store(self, last_act, hidden_in, hidden_out, obs, act, rew,
+    def store(self, last_act, obs, act, rew,
               next_obs, done):
-        self.hid_in_buf[self.ptr] = hidden_in[0]
-        self.hid_in2_buf[self.ptr] = hidden_in[1]
-
-        self.hid_out_buf[self.ptr] = hidden_out[0]
-        self.hid_out2_buf[self.ptr] = hidden_out[1]
 
         self.obs_buf[self.ptr] = obs
         self.obs2_buf[self.ptr] = next_obs
@@ -104,32 +91,18 @@ class ReplayBufferLSTM:
     def sample_batch(self, batch_size=32):
         idxs = np.random.randint(0, self.size, size=batch_size)
 
-        # cat along the batch dim
-        hi_lst = torch.reshape(torch.Tensor(
-            self.hid_out_buf[idxs]), (1, batch_size, 256)).detach()
-        ho_lst = torch.reshape(torch.Tensor(
-            self.hid_out2_buf[idxs]), (1, batch_size, 256)).detach()
-        ci_lst = torch.reshape(torch.Tensor(
-            self.hid_in_buf[idxs]), (1, batch_size, 256)).detach()
-        co_lst = torch.reshape(torch.Tensor(
-            self.hid_in2_buf[idxs]), (1, batch_size, 256)).detach()
-
-        hidden_in = (hi_lst, ci_lst)
-        hidden_out = (ho_lst, co_lst)
-
-        batch = dict(hidden_in=hidden_in,
-                     hidden_out=hidden_out,
-                     act2=self.act2_buf[idxs],
-                     obs=self.obs_buf[idxs],
-                     obs2=self.obs2_buf[idxs],
-                     act=self.act_buf[idxs],
-                     rew=self.rew_buf[idxs],
-                     done=self.done_buf[idxs])
+        batch = dict(
+            act2=self.act2_buf[idxs],
+            obs=self.obs_buf[idxs],
+            obs2=self.obs2_buf[idxs],
+            act=self.act_buf[idxs],
+            rew=self.rew_buf[idxs],
+            done=self.done_buf[idxs])
         return {k: torch.as_tensor(v, dtype=torch.float32) if type(v) != tuple else v for k, v in batch.items()}
 
 
 def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
-        steps_per_epoch=4000, epochs=100, replay_size=int(1e6), gamma=0.99,
+        steps_per_epoch=4000, epochs=100, replay_size=int(1e3), gamma=0.99,
         polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=10000,
         update_after=1000, update_every=50, num_test_episodes=10, max_ep_len=1000,
         logger_kwargs=dict(), save_freq=1):
@@ -258,7 +231,7 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
 
     # Experience buffer
     replay_buffer = ReplayBufferLSTM(
-        obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
+        obs_dim=obs_dim, act_dim=act_dim, size=replay_size, max_ep_len=max_ep_len)
 
     # Count variables (protip: try to get a feel for how different size networks behave!)
     var_counts = tuple(core.count_vars(module)
@@ -270,15 +243,12 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
     def compute_loss_q(data):
         o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
         a, a2 = data['act'], data['act2']
-        hid_in, hid_out = data['hidden_in'], data['hidden_out']
-        print(hid_in[0].shape, hid_in[1].shape)
-        # print("before unsqueeze:", hid_in[0].shape)
 
-        # hid_in = (torch.squeeze(hid_in[0], 0), torch.squeeze(hid_in[1], 0))
-        # print("after unsqueeze:", hid_in[0].shape)
+        d = torch.unsqueeze(d, -1)
+        r = torch.unsqueeze(r, -1)
 
-        q1, _ = ac.q1(o, a, a2, hid_in)
-        q2, _ = ac.q2(o, a, a2, hid_in)
+        q1 = ac.q1(o, a, a2)
+        q2 = ac.q2(o, a, a2)
 
         # Bellman backup for Q functions
         with torch.no_grad():
@@ -286,10 +256,13 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
             a2, logp_a2 = ac.pi(o2)
 
             # Target Q-values
-            q1_pi_targ = ac_targ.q1(o2, a2, a, hid_out)
-            q2_pi_targ = ac_targ.q2(o2, a2, a, hid_out)
-            q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-            backup = r + gamma * (1 - d) * (q_pi_targ - alpha * logp_a2)
+            q1_pi_targ = ac_targ.q1(o2, a2, a)
+            q2_pi_targ = ac_targ.q2(o2, a2, a)
+            q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ) - alpha * logp_a2
+            print(q_pi_targ.shape, logp_a2.shape)
+            print(r.shape)
+            print(d.shape)
+            backup = r + gamma * (1 - d) * (q_pi_targ)
 
         # MSE loss against Bellman backup
         loss_q1 = ((q1 - backup)**2).mean()
@@ -305,10 +278,12 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
     # Set up function for computing SAC pi loss
     # TODO: Make recurrent
     def compute_loss_pi(data):
-        o = data['obs']
+        o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
+        a, a2 = data['act'], data['act2']
+
         pi, logp_pi = ac.pi(o)
-        q1_pi = ac.q1(o, pi)
-        q2_pi = ac.q2(o, pi)
+        q1_pi = ac.q1(o, pi, a2)
+        q2_pi = ac.q2(o, pi, a2)
         q_pi = torch.min(q1_pi, q2_pi)
 
         # Entropy-regularized policy loss
@@ -377,25 +352,33 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
                 ep_len += 1
             logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
 
+    # Variables for episodic replay buffer
+    e_a = []
+    e_a2 = []
+    e_o = []
+    e_o2 = []
+    e_d = []
+    e_r = []
+
     # Prepare for interaction with environment
     total_steps = steps_per_epoch * epochs
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
 
     # Recurrent shape
-    hidden_out = (np.zeros([1, 1, 256], dtype=np.float),
-                  np.zeros([1, 1, 256], dtype=np.float))
+    # hidden_out = (np.zeros([1, 1, 256], dtype=np.float),
+    #               np.zeros([1, 1, 256], dtype=np.float))
     a2 = env.action_space.sample()
 
     # Main loop: collect experience in env and update/log each epoch
     for t in range(total_steps):
-        hidden_in = hidden_out
+        # hidden_in = hidden_out
 
         # Until start_steps have elapsed, randomly sample actions
         # from a uniform distribution for better exploration. Afterwards,
         # use the learned policy.
         if t > start_steps:
-            a, hidden_out = get_action(o)
+            a, _ = get_action(o)
         else:
             a = env.action_space.sample()
 
@@ -409,10 +392,13 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
         # that isn't based on the agent's state)
         d = False if ep_len == max_ep_len else d
 
-        # Store experience to replay buffer
-        # last_act, hidden_in, hidden_out, obs, act, rew,
-        #   next_obs, done
-        replay_buffer.store(a2, hidden_in, hidden_out, o, a, r, o2, d)
+        # Episodic replay buffer
+        e_a.append(a)
+        e_a2.append(a2)
+        e_o.append(o)
+        e_o2.append(o2)
+        e_d.append(d)
+        e_r.append(r)
 
         # Super critical, easy to overlook step: make sure to update
         # most recent observation!
@@ -421,6 +407,25 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(), seed=0,
 
         # End of trajectory handling
         if d or (ep_len == max_ep_len):
+            # Store experience to replay buffer
+            e_a = np.asarray(e_a)
+            e_a2 = np.asarray(e_a2)
+            e_o = np.asarray(e_o)
+            e_o2 = np.asarray(e_o2)
+            e_d = np.asarray(e_d)
+            e_r = np.asarray(e_r)
+
+            # last_act, hidden_in, hidden_out, obs, act, rew,
+            # next_obs, done
+            replay_buffer.store(e_a2, e_o, e_a, e_r, e_o2, e_d)
+
+            e_a = []
+            e_a2 = []
+            e_o = []
+            e_o2 = []
+            e_d = []
+            e_r = []
+
             logger.store(EpRet=ep_ret, EpLen=ep_len)
             o, ep_ret, ep_len = env.reset(), 0, 0
 
