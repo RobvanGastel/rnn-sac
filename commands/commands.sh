@@ -4,6 +4,6 @@
 tensorboard --logdir=data/local/experiment
 
 # Hosting tensorboard results
-tensorboard dev upload --logdir data/log \
-    --name "(optional) My latest experiment" \
-    --description "(optional) Simple comparison of several hyperparameters"
+tensorboard dev upload -logdir=data/local/experiment \
+    --name "Comparisons of MAML and RL2 on ML1 and ML10" \
+    --description "Comparison of base implementations in Garage"
