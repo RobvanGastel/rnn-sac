@@ -180,10 +180,10 @@ class ReplayBufferLSTM:
 
 
 def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
-        lstm_size=256, seed=0, steps_per_epoch=4000, epochs=100,
-        replay_size=int(1e3), gamma=0.99, polyak=0.995, lr=3e-4,
-        alpha=.2, batch_size=2, start_steps=10000,
-        update_after=1000, update_every=300, num_test_episodes=10,
+        lstm_size=512, seed=0, steps_per_epoch=4000, epochs=100,
+        replay_size=int(1e6), gamma=0.99, polyak=0.995, lr=3e-4,
+        alpha=0., batch_size=1, start_steps=10000,
+        update_after=1000, update_every=50, num_test_episodes=10,
         max_ep_len=200, logger_kwargs=dict(), save_freq=1):
     """
     Soft Actor-Critic (SAC)
@@ -284,9 +284,11 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 
     # TODO: Normalize Env
     # env = NormalizedActions(gym.make(ENV))
-
+    target_entropy = -2
+    reward_scale = 10.
     auto_entropy = True
     replay_buffer_size = 1e6
+    
 
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
@@ -294,7 +296,8 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    env, test_env = env_fn(), env_fn()
+    env, test_env = NormalizedActions(env_fn()), NormalizedActions(env_fn())
+    # env, test_env = env_fn(), env_fn()
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.shape[0]
 
@@ -309,6 +312,9 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
     # Create actor-critic module and target networks
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
     ac_targ = deepcopy(ac)
+
+    log_alpha = torch.zeros(
+            1, dtype=torch.float32, requires_grad=True)
 
     # Freeze target networks with respect to optimizers (only update via
     # polyak averaging)
@@ -333,22 +339,21 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         '\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n'
         % var_counts)
 
-    # Set up optimizers for policy and q-function
-    pi_optimizer = Adam(ac.pi.parameters(), lr=lr)
-    q_optimizer = Adam(q_params, lr=lr)
-
-    # Set up model saving
-    logger.setup_pytorch_saver(ac)
 
     # Set up function for computing SAC Q-losses
     def compute_loss_q(data):
         print("Compute loss q")
         o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
         a, a2 = data['act'], data['act2']
+        # Hidden layers of the LSTM layer
         hid_in, hid_out = data['hid_in'], data['hid_out']
 
         d = torch.unsqueeze(d, -1)
         r = torch.unsqueeze(r, -1)
+
+        # normalize with batch mean and std; plus a small number to prevent numerical problem
+        # r = reward_scale * \
+        #     (r - r.mean(dim=0)) / (r.std(dim=0) + 1e-6)
 
         q1, _ = ac.q1(o, a, a2, hid_in)
         q2, _ = ac.q2(o, a, a2, hid_in)
@@ -389,9 +394,17 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         q2_pi, _ = ac.q2(o, pi, a2, hid_in)
         q_pi = torch.min(q1_pi, q2_pi)
 
-        # Entropy-regularized policy loss
         # Could apply alpha auto entropy as trade-off between
         # exploration (max entropy) and exploitation (max Q)
+        if auto_entropy is True:
+            alpha_loss = -(log_alpha * (logp_pi +
+                                             target_entropy).detach()).mean()
+            alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            alpha_optimizer.step()
+            alpha = log_alpha.exp()
+
+        # Entropy-regularized policy loss
         loss_pi = (alpha * logp_pi - q_pi).mean()
 
         # Useful info for logging
@@ -399,8 +412,19 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 
         return loss_pi, pi_info
 
+
+    # Set up optimizers for policy and q-function
+    pi_optimizer = Adam(ac.pi.parameters(), lr=lr)
+    q_optimizer = Adam(q_params, lr=lr)
+    alpha_optimizer = Adam([log_alpha], lr=lr)
+
+    # Set up model saving
+    logger.setup_pytorch_saver(ac)
+
+
     def update(data):
         print("Updating")
+
         # First run one gradient descent step for Q1 and Q2
         q_optimizer.zero_grad()
         loss_q, q_info = compute_loss_q(data)
@@ -522,8 +546,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
             e_o2 = np.asarray(e_o2)
             e_d = np.asarray(e_d)
             e_r = np.asarray(e_r)
-
-            # Store experience to replay buffer
             replay_buffer.store(e_a2, e_o, e_a, e_r, e_o2,
                                 init_hid_in, init_hid_out, e_d)
             e_a, e_a2, e_o, e_o2, e_d, e_r = [], [], [], [], [], []
