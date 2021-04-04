@@ -4,13 +4,14 @@
     },
     "actor_critic":	"RNNActorCritic",
     "alpha":	0.2,
+    "auto_entropy":	true,
     "batch_size":	2,
-    "env_fn":	"<function <lambda> at 0x7f0735ba9560>",
+    "env_fn":	"<function <lambda> at 0x7f44458b7560>",
     "epochs":	100,
     "exp_name":	"rnn_sac",
     "gamma":	0.99,
     "logger":	{
-        "<algo.utils.logx.EpochLogger object at 0x7f0675a7e850>":	{
+        "<algo.utils.logx.EpochLogger object at 0x7f438578ca50>":	{
             "epoch_dict":	{},
             "exp_name":	"rnn_sac",
             "first_row":	true,
@@ -28,11 +29,12 @@
         "exp_name":	"rnn_sac",
         "output_dir":	"/home/rob/Git/meta-learners/algo/data/rnn_sac/rnn_sac_s42"
     },
-    "lr":	0.001,
+    "lr":	0.0003,
     "lstm_size":	256,
     "max_ep_len":	200,
     "num_test_episodes":	10,
     "polyak":	0.995,
+    "replay_buffer_size":	1000000.0,
     "replay_size":	1000,
     "save_freq":	1,
     "seed":	0,

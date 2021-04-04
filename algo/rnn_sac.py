@@ -14,6 +14,26 @@ https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/sac/sac.py
 """
 
 
+class NormalizedActions(gym.ActionWrapper):
+    def _action(self, action):
+        low = self.action_space.low
+        high = self.action_space.high
+
+        action = low + (action + 1.0) * 0.5 * (high - low)
+        action = np.clip(action, low, high)
+
+        return action
+
+    def _reverse_action(self, action):
+        low = self.action_space.low
+        high = self.action_space.high
+
+        action = 2 * (action - low) / (high - low) - 1
+        action = np.clip(action, low, high)
+
+        return action
+
+
 class ReplayBuffer:
     """
     A simple FIFO experience replay buffer for SAC agents.
@@ -126,7 +146,6 @@ class ReplayBufferLSTM:
         for sample in batch:
             (h_in, c_in), (h_out, c_out), state, action, last_action, \
                                reward, next_state, done = sample
-            print(h_in[0].shape, "asdsa")
             s_lst.append(state)
             a_lst.append(action)
             la_lst.append(last_action)
@@ -154,13 +173,15 @@ class ReplayBufferLSTM:
             act=a_lst,
             rew=r_lst,
             done=d_lst)
-        return {k: torch.as_tensor(v, dtype=torch.float32)
+        # print(v for v in batch)
+        # print([np.asarray(v).shape if type(v) != tuple else (v[0].shape, v[1].shape) for k,v in batch.items()])
+        return {k: torch.FloatTensor(v)
                 if type(v) != tuple else v for k, v in batch.items()}
 
 
 def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         lstm_size=256, seed=0, steps_per_epoch=4000, epochs=100,
-        replay_size=int(1e3), gamma=0.99, polyak=0.995, lr=1e-3,
+        replay_size=int(1e3), gamma=0.99, polyak=0.995, lr=3e-4,
         alpha=.2, batch_size=2, start_steps=10000,
         update_after=1000, update_every=300, num_test_episodes=10,
         max_ep_len=200, logger_kwargs=dict(), save_freq=1):
@@ -260,6 +281,12 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
             the current policy and value function.
 
     """
+
+    # TODO: Normalize Env
+    # env = NormalizedActions(gym.make(ENV))
+
+    auto_entropy = True
+    replay_buffer_size = 1e6
 
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
@@ -496,15 +523,13 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
             e_d = np.asarray(e_d)
             e_r = np.asarray(e_r)
 
+            # Store experience to replay buffer
+            replay_buffer.store(e_a2, e_o, e_a, e_r, e_o2,
+                                init_hid_in, init_hid_out, e_d)
             e_a, e_a2, e_o, e_o2, e_d, e_r = [], [], [], [], [], []
 
             logger.store(EpRet=ep_ret, EpLen=ep_len)
             o, ep_ret, ep_len = env.reset(), 0, 0
-
-
-        # Store experience to replay buffer
-        replay_buffer.store(e_a2, e_o, e_a, e_r, e_o2,
-                            init_hid_in, init_hid_out, e_d)
 
         # Update handling
         if t >= update_after and t % update_every == 0:

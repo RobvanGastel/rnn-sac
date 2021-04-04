@@ -167,16 +167,6 @@ class RNNActor(nn.Module):
         obs = obs.permute(1, 0, 2)
         last_action = last_action.permute(1, 0, 2)
 
-        # TODO: Adjust this deterministic
-        # if deterministic:
-        #     hidden_in = (torch.Tensor(
-        #         hidden_in[0]), torch.Tensor(hidden_in[1]))
-
-        # if not deterministic:
-        #     hidden_in = hidden_in.permute(1, 0, 2)
-        #     hidden_in = (torch.unsqueeze(
-        #         hidden_in[0], 0), torch.unsqueeze(hidden_in[1], 0))
-
         # branch 1
         fc_branch = F.relu(self.linear1(obs))
         # branch 2
@@ -188,7 +178,7 @@ class RNNActor(nn.Module):
         merged_branch = torch.cat([fc_branch, lstm_branch], -1)
         x = F.relu(self.linear3(merged_branch))
         x = F.relu(self.linear4(x))
-        net_out = x.permute(1, 0, 2)  # back to same axes as input
+        x = x.permute(1, 0, 2)  # back to same axes as input
         # lstm_hidden is actually tuple: (hidden, cell)
 
         mean = self.mean_linear(x)
