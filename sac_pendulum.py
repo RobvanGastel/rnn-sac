@@ -24,6 +24,6 @@ if __name__ == "__main__":
                  logger_kwargs=logger_kwargs)
 
     # SAC
-#     algo.sac(lambda: gym.make(args['env']), actor_critic=core.MLPActorCritic,
-#              ac_kwargs=dict(hidden_sizes=[args['hid']]*args['l']),
-#              logger_kwargs=logger_kwargs)
+    # algo.sac(lambda: gym.make(args['env']), actor_critic=core.MLPActorCritic,
+    #             ac_kwargs=dict(hidden_sizes=[args['hid']]*args['l']),
+    #             logger_kwargs=logger_kwargs)

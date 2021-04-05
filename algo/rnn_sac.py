@@ -82,24 +82,6 @@ class ReplayBufferLSTM:
     """
 
     def __init__(self, obs_dim, act_dim, hidden_dim, size, max_ep_len):
-        # self.hid_in_buf = np.zeros((size, 2, hidden_dim), dtype=np.float32)
-        # self.hid_out_buf = np.zeros((size, 2, hidden_dim), dtype=np.float32)
-
-        # # TODO: Careful as the obs_dim is assumed to be 1D
-        # self.obs_buf = np.zeros((
-        #     size, max_ep_len, obs_dim[0]), dtype=np.float32)
-        # self.obs2_buf = np.zeros((
-        #     size, max_ep_len, obs_dim[0]), dtype=np.float32)
-        # self.act_buf = np.zeros((
-        #     size, max_ep_len, act_dim), dtype=np.float32)
-        # self.act2_buf = np.zeros((
-        #     size, max_ep_len, act_dim), dtype=np.float32)
-        # self.rew_buf = np.zeros((
-        #     size, max_ep_len), dtype=np.float32)
-        # self.done_buf = np.zeros((
-        #     size, max_ep_len), dtype=np.float32)
-
-        # self.ptr, self.size, self.max_size = 0, 0, size
         self.capacity = size
         self.buffer = []
         self.position = 0
@@ -113,36 +95,13 @@ class ReplayBufferLSTM:
         self.position = int((self.position + 1) %
                             self.capacity)  # as a ring buffer
 
-        # self.hid_in_buf[self.ptr] = hid_in
-        # self.hid_out_buf[self.ptr] = hid_out
-
-        # self.obs_buf[self.ptr] = obs
-        # self.obs2_buf[self.ptr] = next_obs
-        # self.act_buf[self.ptr] = act
-        # self.act2_buf[self.ptr] = last_act
-        # self.rew_buf[self.ptr] = rew
-        # self.done_buf[self.ptr] = done
-        # self.ptr = (self.ptr+1) % self.max_size
-        # self.size = min(self.size+1, self.max_size)
-
     def sample_batch(self, batch_size=32):
-        # idxs = np.random.randint(0, self.size, size=batch_size)
-
-        # batch = dict(
-        #     hid_in=self.hid_in_buf[idxs],
-        #     hid_out=self.hid_out_buf[idxs],
-        #     act2=self.act2_buf[idxs],
-        #     obs=self.obs_buf[idxs],
-        #     obs2=self.obs2_buf[idxs],
-        #     act=self.act_buf[idxs],
-        #     rew=self.rew_buf[idxs],
-        #     done=self.done_buf[idxs])
-        # return {k: torch.as_tensor(v, dtype=torch.float32)
-        #         if type(v) != tuple else v for k, v in batch.items()}
         s_lst, a_lst, la_lst, r_lst, ns_lst, hi_lst, \
             ci_lst, ho_lst, co_lst, d_lst = [
             ], [], [], [], [], [], [], [], [], []
         batch = random.sample(self.buffer, batch_size)
+
+        # TODO: Omit this for-loop by moving it to torch/np
         for sample in batch:
             (h_in, c_in), (h_out, c_out), state, action, last_action, \
                 reward, next_state, done = sample
@@ -156,7 +115,8 @@ class ReplayBufferLSTM:
             ci_lst.append(c_in)
             ho_lst.append(h_out)
             co_lst.append(c_out)
-        hi_lst = torch.cat(hi_lst, dim=-2).detach()  # cat along the batch dim
+        # cat along the batch dim
+        hi_lst = torch.cat(hi_lst, dim=-2).detach()
         ho_lst = torch.cat(ho_lst, dim=-2).detach()
         ci_lst = torch.cat(ci_lst, dim=-2).detach()
         co_lst = torch.cat(co_lst, dim=-2).detach()
@@ -173,8 +133,8 @@ class ReplayBufferLSTM:
             act=a_lst,
             rew=r_lst,
             done=d_lst)
-        # print(v for v in batch)
-        # print([np.asarray(v).shape if type(v) != tuple else (v[0].shape, v[1].shape) for k,v in batch.items()])
+
+        # TODO: Move these tensors to GPU?
         return {k: torch.FloatTensor(v)
                 if type(v) != tuple else v for k, v in batch.items()}
 
@@ -193,16 +153,16 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         env_fn : A function which creates a copy of the environment.
             The environment must satisfy the OpenAI Gym API.
 
-        actor_critic: The constructor method for a PyTorch Module with an ``act``
-            method, a ``pi`` module, a ``q1`` module, and a ``q2`` module.
-            The ``act`` method and ``pi`` module should accept batches of
-            observations as inputs, and ``q1`` and ``q2`` should accept a batch
-            of observations and a batch of actions as inputs. When called,
-            ``act``, ``q1``, and ``q2`` should return:
+        actor_critic: The constructor method for a PyTorch Module with an
+            ``act`` method, a ``pi`` module, a ``q1`` module, and a ``q2``
+            module. The ``act`` method and ``pi`` module should accept batches
+            of observations as inputs, and ``q1`` and ``q2`` should accept
+            a batch of observations and a batch of actions as inputs. When
+            called, ``act``, ``q1``, and ``q2`` should return:
 
-            ===========  ================  ======================================
+            ===========  ================  ====================================
             Call         Output Shape      Description
-            ===========  ================  ======================================
+            ===========  ================  ====================================
             ``act``      (batch, act_dim)  | Numpy array of actions for each
                                            | observation.
             ``q1``       (batch,)          | Tensor containing one current estimate
@@ -213,27 +173,27 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
                                            | estimate of Q* for the provided observations
                                            | and actions. (Critical: make sure to
                                            | flatten this!)
-            ===========  ================  ======================================
+            ===========  ================  ====================================
 
             Calling ``pi`` should return:
 
-            ===========  ================  ======================================
+            ===========  ================  ====================================
             Symbol       Shape             Description
-            ===========  ================  ======================================
+            ===========  ================  ====================================
             ``a``        (batch, act_dim)  | Tensor containing actions from policy
                                            | given observations.
             ``logp_pi``  (batch,)          | Tensor containing log probabilities of
                                            | actions in ``a``. Importantly: gradients
                                            | should be able to flow back into ``a``.
-            ===========  ================  ======================================
+            ===========  ================  ====================================
 
         ac_kwargs (dict): Any kwargs appropriate for the ActorCritic object
             you provided to SAC.
 
         seed (int): Seed for random number generators.
 
-        steps_per_epoch (int): Number of steps of interaction (state-action pairs)
-            for the agent and the environment in each epoch.
+        steps_per_epoch (int): Number of steps of interaction (state-action
+            pairs) for the agent and the environment in each epoch.
 
         epochs (int): Number of epochs to run and train agent.
 
@@ -282,8 +242,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 
     """
 
-    # TODO: Normalize Env
-    # env = NormalizedActions(gym.make(ENV))
     target_entropy = -2
     reward_scale = 10.
     auto_entropy = True
@@ -296,7 +254,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
     np.random.seed(seed)
 
     env, test_env = NormalizedActions(env_fn()), NormalizedActions(env_fn())
-    # env, test_env = env_fn(), env_fn()
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.shape[0]
 
@@ -312,8 +269,12 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
     ac_targ = deepcopy(ac)
 
-    log_alpha = torch.zeros(
-        1, dtype=torch.float32, requires_grad=True)
+    # Take gradient of alpha to balance exploitation vs exploration
+    # TODO: How does this work in meta-learning setting?
+    # Garage proposes different alphas for every task,
+    # https://garage.readthedocs.io/en/latest/user/algo_mtsac.html
+    # log_alpha = torch.zeros(
+    #     1, dtype=torch.float32, requires_grad=True)
 
     # Freeze target networks with respect to optimizers (only update via
     # polyak averaging)
@@ -325,7 +286,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 
     # Experience buffer
     # Note, this replay buffer stores entire trajectories
-    # TODO: Adjust this to also handle episodes that terminate earlier
     replay_buffer = ReplayBufferLSTM(
         obs_dim=obs_dim, act_dim=act_dim, hidden_dim=lstm_size,
         size=replay_size, max_ep_len=max_ep_len)
@@ -339,7 +299,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         % var_counts)
 
     # Set up function for computing SAC Q-losses
-
     def compute_loss_q(data):
         print("Compute loss q")
         o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
@@ -350,7 +309,9 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         d = torch.unsqueeze(d, -1)
         r = torch.unsqueeze(r, -1)
 
-        # normalize with batch mean and std; plus a small number to prevent numerical problem
+        # TODO: Normalize the batch reward
+        # normalize with batch mean and std; plus a small number to prevent
+        # numerical problem
         # r = reward_scale * \
         #     (r - r.mean(dim=0)) / (r.std(dim=0) + 1e-6)
 
@@ -382,7 +343,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 
     # Set up function for computing SAC pi loss
     def compute_loss_pi(data):
-        print("Compute loss pi")
         o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
         a, a2 = data['act'], data['act2']
         # Hidden layers of the LSTM layer
@@ -414,7 +374,8 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
     # Set up optimizers for policy and q-function
     pi_optimizer = Adam(ac.pi.parameters(), lr=lr)
     q_optimizer = Adam(q_params, lr=lr)
-    alpha_optimizer = Adam([log_alpha], lr=lr)
+    # Exploring alpha loss
+    # alpha_optimizer = Adam([log_alpha], lr=lr)
 
     # Set up model saving
     logger.setup_pytorch_saver(ac)
@@ -587,7 +548,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    # parser.add_argument('--env', type=str, default='HalfCheetah-v2')
     parser.add_argument('--env', type=str, default='BipedalWalker-v3')
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2)

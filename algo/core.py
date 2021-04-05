@@ -54,11 +54,13 @@ class SquashedGaussianMLPActor(nn.Module):
             pi_action = pi_distribution.rsample()
 
         if with_logprob:
-            # Compute logprob from Gaussian, and then apply correction for Tanh squashing.
-            # NOTE: The correction formula is a little bit magic. To get an understanding
-            # of where it comes from, check out the original SAC paper (arXiv 1801.01290)
-            # and look in appendix C. This is a more numerically-stable equivalent to Eq 21.
-            # Try deriving it yourself as a (very difficult) exercise. :)
+            # Compute logprob from Gaussian, and then apply correction
+            # for Tanh squashing. NOTE: The correction formula is a little
+            # bit magic. To get an understanding of where it comes from,
+            # check out the original SAC paper (arXiv 1801.01290)
+            # and look in appendix C. This is a more numerically-stable
+            # equivalent to Eq 21. Try deriving it yourself as a (very
+            # difficult) exercise. :)
             logp_pi = pi_distribution.log_prob(pi_action).sum(axis=-1)
             logp_pi -= (2*(np.log(2) - pi_action -
                            F.softplus(-2*pi_action))).sum(axis=1)
@@ -125,10 +127,9 @@ class RNNActor(nn.Module):
         self.log_std_linear = nn.Linear(hidden_size, act_dim)
 
     def get_action(self, obs, last_action, hidden_in, deterministic=False):
-        obs = torch.FloatTensor(obs).unsqueeze(0).unsqueeze(
-            0)  # increase 2 dims to match with training data
-        last_action = torch.FloatTensor(
-            last_action).unsqueeze(0).unsqueeze(0)
+        # increase 2 dims to match with training data
+        obs = torch.FloatTensor(obs).unsqueeze(0).unsqueeze(0)
+        last_action = torch.FloatTensor(last_action).unsqueeze(0).unsqueeze(0)
         mean, log_std, hidden_out = self.forward(
             obs, last_action, hidden_in)
         std = log_std.exp()
@@ -145,7 +146,8 @@ class RNNActor(nn.Module):
 
     def evaluate(self, obs, last_action, hidden_in, epsilon=1e-6):
         mean, log_std, hidden_out = self.forward(obs, last_action, hidden_in)
-        std = log_std.exp()  # no clip in evaluation, clip affects gradients flow
+        std = log_std.exp()  # no clip in evaluation, clip affects gradients
+        # flow
 
         normal = Normal(0, 1)
         z = normal.sample(mean.shape)
@@ -205,10 +207,10 @@ class RNNQFunction(nn.Module):
         return NotImplementedError
 
     def forward(self, obs, action, last_action, hidden_in):
-        """ 
+        """
         obs shape: (batch_size, sequence_length, state_dim)
         output shape: (batch_size, sequence_length, 1)
-        for lstm needs to be permuted as: (sequence_length, batch_size, 
+        for lstm needs to be permuted as: (sequence_length, batch_size,
         state_dim)
         """
         # hidden_in = hidden_in.permute(1, 0, 2)
