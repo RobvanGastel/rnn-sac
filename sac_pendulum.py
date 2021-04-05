@@ -8,7 +8,7 @@ import algo.sac as algo
 import algo.core as core
 
 if __name__ == "__main__":
-    # BipedalWalker-v3
+    # TODO: Test on BipedalWalker-v3, meta-world ML1 and ML10
     args = {'env': 'Pendulum-v0', 'hid': 256,
             'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 50,
             'exp_name': 'rnn_sac', 'seed': 42}

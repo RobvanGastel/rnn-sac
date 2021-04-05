@@ -108,7 +108,7 @@ class MLPActorCritic(nn.Module):
 class RNNActor(nn.Module):
 
     def __init__(self, obs_dim, act_dim, hidden_size, activation,
-     act_limit, action_range=.1):
+                 act_limit, action_range=1.):
         super().__init__()
 
         self.action_range = action_range
@@ -126,7 +126,7 @@ class RNNActor(nn.Module):
 
     def get_action(self, obs, last_action, hidden_in, deterministic=False):
         obs = torch.FloatTensor(obs).unsqueeze(0).unsqueeze(
-            0) # increase 2 dims to match with training data
+            0)  # increase 2 dims to match with training data
         last_action = torch.FloatTensor(
             last_action).unsqueeze(0).unsqueeze(0)
         mean, log_std, hidden_out = self.forward(
@@ -155,8 +155,8 @@ class RNNActor(nn.Module):
         log_prob = Normal(mean, std).log_prob(mean + std * z) - torch.log(
             1. - action_0.pow(2) + epsilon) - np.log(self.action_range)
         # both dims of normal.log_prob and -log(1-a**2) are (N,dim_of_action);
-        # the Normal.log_prob outputs the same dim of input features 
-        # instead of 1 dim probability, needs sum up across the features 
+        # the Normal.log_prob outputs the same dim of input features
+        # instead of 1 dim probability, needs sum up across the features
         # dim to get 1 dim prob; or else use Multivariate Normal.
         log_prob = log_prob.sum(dim=-1, keepdim=True)
         return action, log_prob, z, mean, log_std, hidden_out
@@ -183,9 +183,10 @@ class RNNActor(nn.Module):
 
         mean = self.mean_linear(x)
         log_std = self.log_std_linear(x)
-        log_std = torch.clamp(log_std, LOG_STD_MIN, 
-            LOG_STD_MAX)
+        log_std = torch.clamp(log_std, LOG_STD_MIN,
+                              LOG_STD_MAX)
         return mean, log_std, lstm_hidden
+
 
 class RNNQFunction(nn.Module):
 
@@ -243,7 +244,7 @@ class RNNQFunction(nn.Module):
 class RNNActorCritic(nn.Module):
 
     def __init__(self, observation_space, action_space,
-                 hidden_size=256, activation=nn.Tanh()):
+                 hidden_size=256, activation=nn.ReLU()):
         super().__init__()
 
         obs_dim = observation_space.shape[0]

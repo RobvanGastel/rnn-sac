@@ -107,7 +107,7 @@ class ReplayBufferLSTM:
     def store(self, last_act, obs, act, rew,
               next_obs, hid_in, hid_out, done):
         if len(self.buffer) < self.capacity:
-                self.buffer.append(None)
+            self.buffer.append(None)
         self.buffer[self.position] = (
             hid_in, hid_out, obs, act, last_act, rew, next_obs, done)
         self.position = int((self.position + 1) %
@@ -141,11 +141,11 @@ class ReplayBufferLSTM:
         #         if type(v) != tuple else v for k, v in batch.items()}
         s_lst, a_lst, la_lst, r_lst, ns_lst, hi_lst, \
             ci_lst, ho_lst, co_lst, d_lst = [
-        ], [], [], [], [], [], [], [], [], []
+            ], [], [], [], [], [], [], [], [], []
         batch = random.sample(self.buffer, batch_size)
         for sample in batch:
             (h_in, c_in), (h_out, c_out), state, action, last_action, \
-                               reward, next_state, done = sample
+                reward, next_state, done = sample
             s_lst.append(state)
             a_lst.append(action)
             la_lst.append(last_action)
@@ -288,7 +288,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
     reward_scale = 10.
     auto_entropy = True
     replay_buffer_size = 1e6
-    
 
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
@@ -314,7 +313,7 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
     ac_targ = deepcopy(ac)
 
     log_alpha = torch.zeros(
-            1, dtype=torch.float32, requires_grad=True)
+        1, dtype=torch.float32, requires_grad=True)
 
     # Freeze target networks with respect to optimizers (only update via
     # polyak averaging)
@@ -339,8 +338,8 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         '\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n'
         % var_counts)
 
-
     # Set up function for computing SAC Q-losses
+
     def compute_loss_q(data):
         print("Compute loss q")
         o, r, o2, d = data['obs'], data['rew'], data['obs2'], data['done']
@@ -368,7 +367,7 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
             q1_pi_targ, _ = ac_targ.q1(o2, a2, a, hid_out)
             q2_pi_targ, _ = ac_targ.q2(o2, a2, a, hid_out)
             q_pi_targ = torch.min(q1_pi_targ, q2_pi_targ)
-            backup = r + gamma * (1 - d) * (q_pi_targ- alpha * logp_a2)
+            backup = r + gamma * (1 - d) * (q_pi_targ - alpha * logp_a2)
 
         # MSE loss against Bellman backup
         loss_q1 = ((q1 - backup)**2).mean()
@@ -398,7 +397,7 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         # exploration (max entropy) and exploitation (max Q)
         if auto_entropy is True:
             alpha_loss = -(log_alpha * (logp_pi +
-                                             target_entropy).detach()).mean()
+                                        target_entropy).detach()).mean()
             alpha_optimizer.zero_grad()
             alpha_loss.backward()
             alpha_optimizer.step()
@@ -412,7 +411,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 
         return loss_pi, pi_info
 
-
     # Set up optimizers for policy and q-function
     pi_optimizer = Adam(ac.pi.parameters(), lr=lr)
     q_optimizer = Adam(q_params, lr=lr)
@@ -420,7 +418,6 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 
     # Set up model saving
     logger.setup_pytorch_saver(ac)
-
 
     def update(data):
         print("Updating")
@@ -600,8 +597,8 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='sac')
     args = parser.parse_args()
 
-    # from spinup.utils.run_utils import setup_logger_kwargs
-    # logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
+    from algo.utils.run_utils import setup_logger_kwargs
+    logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     torch.set_num_threads(torch.get_num_threads())
 
