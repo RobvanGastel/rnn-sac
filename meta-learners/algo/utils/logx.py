@@ -380,6 +380,7 @@ class EpochLogger(Logger):
             super().log_tabular(key, val)
         else:
             v = self.epoch_dict[key]
+            print(key)
             vals = np.concatenate(v) if isinstance(
                 v[0], np.ndarray) and len(v[0].shape) > 0 else v
             stats = mpi_statistics_scalar(

@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     args = {'env': ['BipedalWalker-v2', 'BipedalWalkerHardcore-v2'],
             'hid': 256, 'lr': 1e-3, 'alpha': 0.2,
-            'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 50, 'batch_size': 1,
+            'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 300, 'batch_size': 1,
             'start_steps': 10000, 'update_after': 1000, 'update_every': 20,
             'num_test_episodes': 10, 'max_ep_len': max_ep_len,
             'exp_name': 'RL2_SAC'}
