@@ -12,13 +12,13 @@ import algo.core as core
 
 
 if __name__ == "__main__":
-    # TODO: Test on BipedalWalker-v3
-    # TODO: meta-world ML1 and ML10
+    # TODO: Test on BipedalWalker-v3, however bootstrapping doesn't work
+    # properly yet, as it expects different input sizes.
     max_ep_len = gym.make('BipedalWalker-v2')._max_episode_steps
 
     args = {'env': ['BipedalWalker-v2', 'BipedalWalkerHardcore-v2'],
             'hid': 256, 'lr': 1e-3, 'alpha': 0.2,
-            'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 300, 'batch_size': 1,
+            'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 100, 'batch_size': 1,
             'start_steps': 10000, 'update_after': 1000, 'update_every': 20,
             'num_test_episodes': 10, 'max_ep_len': max_ep_len,
             'exp_name': 'RL2_SAC'}

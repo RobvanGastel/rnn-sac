@@ -21,6 +21,9 @@ pip install -e .
 # In the correct dir
 pip install box2d-py
 
+# When running gridworld
+pip install gym_minigrid
+
 # For meta-SAC
 pip install joblib
 Y | conda install -c anaconda mpi4py

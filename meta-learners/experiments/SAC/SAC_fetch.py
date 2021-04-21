@@ -12,17 +12,24 @@ import algo.core as core
 
 
 if __name__ == "__main__":
-    names = ['BipedalWalker-v2', 'BipedalWalkerHardcore-v2']
-    for name in names:
-        max_ep_len = gym.make(name)._max_episode_steps
+    # TODO: Adjust this to the actual meta-world tasks, ML1 and ML10
+    # As soon as the license is available.
 
-        args = {'env': name, 'hid': 256, 'lr': 3e-3, 'alpha': 0.2,
+    # for now substituted with,
+    # FetchReach-v1, FetchSlide-v1, FetchPickAndPlace-v1, FetchPush-v1
+    chosen_task = 0
+    names = ['FetchReach-v1',
+             'FetchSlide-v1,' 'FetchPickAndPlace-v1', 'FetchPush-v1']
+    tasks = [gym.make(n) for n in names]
+    for chosen_task in names:
+        max_ep_len = task[chosen_task]._max_episode_steps
+        args = {'env': names[chosen_task], 'hid': 256, 'lr': 3e-3, 'alpha': 0.2,
                 'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 50, 'batch_size': 100,
-                'start_steps': 10000, 'update_after': 5*max_ep_len, 'update_every': 50,
+                'start_steps': 10000, 'update_after': 1000, 'update_every': 50,
                 'num_test_episodes': 10, 'max_ep_len': max_ep_len,
                 'exp_name': 'SAC'}
 
-        args['exp_name'] += f"_{name}_{args['alpha']}_{args['lr']}"
+        args['exp_name'] += f"_{names[chosen_task]}_{args['alpha']}_{args['lr']}"
 
         from algo.utils.run_utils import setup_logger_kwargs
         logger_kwargs = setup_logger_kwargs(args['exp_name'], args['seed'])
