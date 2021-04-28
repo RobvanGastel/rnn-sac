@@ -61,13 +61,13 @@ class ReplayBufferLSTM:
 
     def sample_batch(self, batch_size=32):
         s_lst, a_lst, la_lst, r_lst, ns_lst, hi_lst, \
-            ci_lst, ho_lst, co_lst, d_lst = [
-            ], [], [], [], [], [], [], [], [], []
+            ho_lst, d_lst = [
+            ], [], [], [], [], [], [], []
         batch = random.sample(self.buffer, batch_size)
 
         # TODO: Omit this for-loop by moving it to torch/np
         for sample in batch:
-            (h_in, c_in), (h_out, c_out), state, action, last_action, \
+            h_in, h_out, state, action, last_action, \
                 reward, next_state, done = sample
             s_lst.append(state)
             a_lst.append(action)
@@ -76,21 +76,14 @@ class ReplayBufferLSTM:
             ns_lst.append(next_state)
             d_lst.append(done)
             hi_lst.append(h_in)  # h_in: (1, batch_size=1, hidden_size)
-            ci_lst.append(c_in)
             ho_lst.append(h_out)
-            co_lst.append(c_out)
         # cat along the batch dim
-        hi_lst = torch.cat(hi_lst, dim=-2).detach()
-        ho_lst = torch.cat(ho_lst, dim=-2).detach()
-        ci_lst = torch.cat(ci_lst, dim=-2).detach()
-        co_lst = torch.cat(co_lst, dim=-2).detach()
-
-        hidden_in = (hi_lst, ci_lst)
-        hidden_out = (ho_lst, co_lst)
+        hi_lst = torch.cat(hi_lst, dim=-2)  # .detach()
+        ho_lst = torch.cat(ho_lst, dim=-2)  # .detach()
 
         batch = dict(
-            hid_in=hidden_in,
-            hid_out=hidden_out,
+            hid_in=hi_lst,
+            hid_out=ho_lst,
             act2=la_lst,
             obs=s_lst,
             obs2=ns_lst,
@@ -99,7 +92,7 @@ class ReplayBufferLSTM:
             done=d_lst)
 
         return {k: torch.FloatTensor(v).cuda()
-                if type(v) != tuple else v for k, v in batch.items()}
+                if type(v) != torch.Tensor else v for k, v in batch.items()}
 
 
 def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
@@ -276,6 +269,7 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
         # Bellman backup for Q functions
         with torch.no_grad():
             # Target actions come from *current* policy
+
             a2, logp_a2, _, _, _, _ = ac.pi.evaluate(o2, a, hid_out)
 
             # Target Q-values
@@ -385,10 +379,7 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
 
     def test_agent():
         # Recurrent shape
-        hidden_out = (torch.zeros([1, 1, hidden_size],
-                                  dtype=torch.float).cuda(),
-                      torch.zeros([1, 1, hidden_size],
-                                  dtype=torch.float).cuda())
+        hidden_out = torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda()
         a2 = env.action_space.sample()
         for j in range(num_test_episodes):
             o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
@@ -411,8 +402,7 @@ def sac(env_fn, actor_critic=core.RNNActorCritic, ac_kwargs=dict(),
     o, ep_ret, ep_len = env.reset(), 0, 0
 
     # Recurrent shape
-    hidden_out = (torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda(),
-                  torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda())
+    hidden_out = torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda()
     a2 = env.action_space.sample()
 
     # Main loop: collect experience in env and update/log each epoch

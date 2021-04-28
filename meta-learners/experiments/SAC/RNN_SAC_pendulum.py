@@ -14,26 +14,26 @@ import algo.core as core
 if __name__ == "__main__":
     max_ep_len = gym.make('Pendulum-v0')._max_episode_steps
 
-    alpha = np.geomspace(0.7, 0.1, num=4)
-    hids = [2**7, 2**8, 2**9]
-    lrs = [0.1, 0.05, 0.01, 0.005]
-    batch_sizes = [3, 5, 10, 20]
+    hids = [512]  # , 1024]
+    lrs = [3e-3]
+    batch_sizes = [5]
+    entrop = [True]
 
-    for hid in hids:
+    for ent in entrop:
         for lr in lrs:
             for batch_size in batch_sizes:
-                args = {'env': 'Pendulum-v0', 'hid': hid, 'lr': lr,
+                args = {'env': 'Pendulum-v0', 'hid': 512, 'lr': lr,
                         'alpha': 0.2,
-                        'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 50,
+                        'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 30,
                         'batch_size': batch_size,
                         'start_steps': 10000,
                         'update_after': max_ep_len*batch_size,
                         'update_every': 50,
                         'num_test_episodes': 10, 'max_ep_len': max_ep_len,
-                        'exp_name': 'LSTM_SAC'}
+                        'exp_name': 'GRU_SAC', 'auto_entropy': ent}
 
-                args['exp_name'] += f"_Pendulum_{args['alpha']}_{args['lr']} \
-                    _{batch_size}_{hid}"
+                # args['exp_name'] += f"_Pendulum_alpha{args['alpha']}_lr{args['lr']}_batch{batch_size}_hidden{hid}"
+                args['exp_name'] += f"_Pendulum_auto{args['auto_entropy']}_batch{batch_size}"
 
                 from algo.utils.run_utils import setup_logger_kwargs
                 logger_kwargs = setup_logger_kwargs(
@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
                 # TODO: Tune parameters, parameter grid?
                 algo.sac(lambda: gym.make(args['env']),
-                         actor_critic=core.RNNActorCritic,
+                         actor_critic=core.GRUActorCritic,
                          ac_kwargs=dict(hidden_size=args['hid']),
                          hidden_size=args['hid'],
                          seed=args['seed'], lr=args['lr'],
@@ -59,4 +59,5 @@ if __name__ == "__main__":
                          max_ep_len=args['max_ep_len'],
                          update_every=args['update_every'],
                          num_test_episodes=args['num_test_episodes'],
-                         logger_kwargs=logger_kwargs)
+                         logger_kwargs=logger_kwargs,
+                         auto_entropy=args['auto_entropy'])

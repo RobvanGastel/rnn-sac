@@ -16,9 +16,9 @@ if __name__ == "__main__":
     for name in names:
         max_ep_len = gym.make(name)._max_episode_steps
 
-        args = {'env': name, 'hid': 512, 'lr': 3e-3, 'alpha': 0.2,
-                'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 50, 'batch_size': 5,
-                'start_steps': 10000, 'update_after': max_ep_len*5, 'update_every': 50,
+        args = {'env': name, 'hid': 512, 'lr': 3e-3, 'alpha': 0.01,
+                'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 130, 'batch_size': 1,
+                'start_steps': 10000, 'update_after': max_ep_len*5, 'update_every': 40,
                 'num_test_episodes': 10, 'max_ep_len': max_ep_len,
                 'exp_name': 'LSTM_SAC'}
 

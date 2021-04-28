@@ -9,8 +9,9 @@
 # python ./meta-learners/experiments/SAC/SAC_fetch.py
 # python ./meta-learners/experiments/SAC/RL2_SAC_fetch.py
 
-python ./meta-learners/experiments/SAC/SAC_pendulum.py
-python ./meta-learners/experiments/SAC/RNN_SAC_pendulum.py 
+# python ./meta-learners/experiments/SAC/SAC_pendulum.py
+# python ./meta-learners/experiments/SAC/RNN_SAC_pendulum.py 
 
 # Run bipedal tasks
-python ./meta-learners/experiments/SAC/SAC_bipedal.py
+python ./meta-learners/experiments/SAC/RL2_SAC_bipedal.py
+python ./meta-learners/experiments/SAC/RNN_SAC_bipedal.py
