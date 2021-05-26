@@ -7,8 +7,8 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
-import algo.sac as algo
-import algo.core as core
+import sac as algo
+import core as core
 # autopep8: on
 
 

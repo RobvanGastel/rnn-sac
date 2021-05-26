@@ -6,8 +6,8 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))))
 
-import algo.rnn_sac as algo
-import algo.core as core
+import gru_sac as algo
+import core as core
 # autopep8: on
 
 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     for ent in entrop:
         for lr in lrs:
             for batch_size in batch_sizes:
-                args = {'env': 'Pendulum-v0', 'hid': 512, 'lr': lr,
+                args = {'env': 'Pendulum-v0', 'hid': 128, 'lr': lr,
                         'alpha': 0.2,
                         'l': 2, 'gamma': 0.99, 'seed': 0, 'epoch': 30,
                         'batch_size': batch_size,
@@ -33,7 +33,7 @@ if __name__ == "__main__":
                         'exp_name': 'GRU_SAC', 'auto_entropy': ent}
 
                 # args['exp_name'] += f"_Pendulum_alpha{args['alpha']}_lr{args['lr']}_batch{batch_size}_hidden{hid}"
-                args['exp_name'] += f"_Pendulum_auto{args['auto_entropy']}_batch{batch_size}"
+                args['exp_name'] += f"_Pendulum"
 
                 from algo.utils.run_utils import setup_logger_kwargs
                 logger_kwargs = setup_logger_kwargs(

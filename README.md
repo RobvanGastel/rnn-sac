@@ -2,12 +2,15 @@
 Evaluating the Soft-Actor Critic using an RNN policy on meta-world environments.
 
 
-TODO: Write summary on the goal of the experiment
+TODO: Write summary on the goal of the experiment, lack of base implementation of RNN SAC in popular frameworks like SB3
 
 TODO: Write down th experiment results of the different methods 
 
 ## TODO:
 - Reference usage of the SpinningUp original implementation
+- Evaluate on gridworld, which requires a discrete policy
+- Introduce Garage experiments
+- Refactor experiments due to path change
 
 
 **References**

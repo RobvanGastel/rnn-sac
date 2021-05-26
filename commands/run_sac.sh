@@ -1,17 +1,10 @@
 # source ~/miniconda3/etc/profile.d/conda.sh
-# conda activate temp
+# conda activate meta 
 
-# TODO: Adjust the buffer to make this work
-# python ./meta-learners/experiments/SAC/RNN_SAC_bipedal.py
-# python ./meta-learners/experiments/SAC/RL2_SAC_bipedal.py
+# fetch is equivalent to ML1
+# python ./rnn-sac/experiments/sac/SAC_fetch.py
+# python ./rnn-sac/experiments/sac/RL2_SAC_fetch.py
 
-# TODO: Wait for license on Mujoco
-# python ./meta-learners/experiments/SAC/SAC_fetch.py
-# python ./meta-learners/experiments/SAC/RL2_SAC_fetch.py
+# python ./rnn-sac/experiments/sac/SAC_pendulum.py
+# python ./rnn-sac/experiments/sac/RNN_SAC_pendulum.py 
 
-# python ./meta-learners/experiments/SAC/SAC_pendulum.py
-# python ./meta-learners/experiments/SAC/RNN_SAC_pendulum.py 
-
-# Run bipedal tasks
-python ./meta-learners/experiments/SAC/RL2_SAC_bipedal.py
-python ./meta-learners/experiments/SAC/RNN_SAC_bipedal.py
