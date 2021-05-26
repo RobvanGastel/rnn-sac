@@ -11,6 +11,7 @@ TODO: Write down th experiment results of the different methods
 - Evaluate on gridworld, which requires a discrete policy
 - Introduce Garage experiments
 - Refactor experiments due to path change
+- Because of buffer shapes we need whole complete episodes, solve this
 
 
 **References**

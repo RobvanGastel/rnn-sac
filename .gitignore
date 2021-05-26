@@ -1,8 +1,8 @@
 .DS_Store
 
 /results
-/data
-meta-learners/algo/data/
+data/
+
 __pycache__
 
 .ipynb_checkpoints

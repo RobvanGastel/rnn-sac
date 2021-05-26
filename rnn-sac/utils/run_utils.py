@@ -1,7 +1,7 @@
 
-from algo.utils.logx import colorize
-from algo.utils.mpi_tools import mpi_fork, msg
-from algo.utils.serialization_utils import convert_json
+from utils.logx import colorize
+from utils.mpi_tools import mpi_fork, msg
+from utils.serialization_utils import convert_json
 import base64
 from copy import deepcopy
 import cloudpickle

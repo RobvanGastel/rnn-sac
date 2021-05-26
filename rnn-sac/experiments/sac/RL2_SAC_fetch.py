@@ -14,9 +14,6 @@ import core as core
 if __name__ == "__main__":
     # TODO: meta-world ML1 and ML10
 
-    # TODO: Adjust this to the actual meta-world tasks, ML1 and ML10
-    # As soon as the license is available.
-
     # for now substituted with,
     # FetchReach-v1, FetchSlide-v1, FetchPickAndPlace-v1, FetchPush-v1
     chosen_task = 0
@@ -42,7 +39,7 @@ if __name__ == "__main__":
     torch.set_num_threads(torch.get_num_threads())
 
     # TODO: Tune parameters, parameter grid?
-    algo.sac(args['env'], actor_critic=core.RNNActorCritic,
+    algo.sac(args['env'], actor_critic=core.LSTMActorCritic,
              ac_kwargs=dict(hidden_size=args['hid']), hidden_size=args['hid'],
              seed=args['seed'], lr=args['lr'], alpha=args['alpha'],
              gamma=args['gamma'], epochs=args['epoch'],

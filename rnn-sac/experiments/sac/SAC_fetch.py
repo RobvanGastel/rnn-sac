@@ -13,7 +13,6 @@ import core as core
 
 if __name__ == "__main__":
     # TODO: Adjust this to the actual meta-world tasks, ML1 and ML10
-    # As soon as the license is available.
 
     # for now substituted with,
     # FetchReach-v1, FetchSlide-v1, FetchPickAndPlace-v1, FetchPush-v1

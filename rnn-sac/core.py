@@ -1,6 +1,5 @@
 import math
 import numpy as np
-import scipy.signal
 
 import torch
 import torch.nn as nn
@@ -67,9 +66,7 @@ class SquashedGaussianMLPActor(nn.Module):
             # for Tanh squashing. NOTE: The correction formula is a little
             # bit magic. To get an understanding of where it comes from,
             # check out the original SAC paper (arXiv 1801.01290)
-            # and look in appendix C. This is a more numerically-stable
-            # equivalent to Eq 21. Try deriving it yourself as a (very
-            # difficult) exercise. :)
+            # and look in appendix C.
             logp_pi = pi_distribution.log_prob(pi_action).sum(axis=-1)
             logp_pi -= (2*(np.log(2) - pi_action -
                            F.softplus(-2*pi_action))).sum(axis=1)
@@ -116,7 +113,11 @@ class MLPActorCritic(nn.Module):
             return a.numpy()
 
 
-class RNNActor(nn.Module):
+"""Recurrent Neural Network Q functions and Actors.
+"""
+
+
+class LSTMActor(nn.Module):
 
     def __init__(self, obs_dim, act_dim, hidden_size, activation,
                  act_limit, action_range=1., init_w=3e-3):
@@ -142,8 +143,8 @@ class RNNActor(nn.Module):
 
     def get_action(self, obs, last_action, hidden_in, deterministic=False):
         # increase 2 dims to match with training data
-        obs = torch.FloatTensor(obs).unsqueeze(0).unsqueeze(0).cuda()
-        last_action = torch.FloatTensor(
+        obs = torch.Tensor(obs).unsqueeze(0).unsqueeze(0).cuda()
+        last_action = torch.Tensor(
             last_action).unsqueeze(0).unsqueeze(0).cuda()
         mean, log_std, hidden_out = self.forward(
             obs, last_action, hidden_in)
@@ -204,7 +205,7 @@ class RNNActor(nn.Module):
         return mean, log_std, lstm_hidden
 
 
-class RNNQFunction(nn.Module):
+class LSTMQFunction(nn.Module):
 
     def __init__(self, obs_dim, act_dim, hidden_dim, activation):
         super().__init__()
@@ -252,7 +253,7 @@ class RNNQFunction(nn.Module):
         return x, lstm_hidden
 
 
-class RNNActorCritic(nn.Module):
+class LSTMActorCritic(nn.Module):
 
     def __init__(self, observation_space, action_space,
                  hidden_size=256, activation=nn.ReLU()):
@@ -263,12 +264,11 @@ class RNNActorCritic(nn.Module):
         act_limit = action_space.high[0]
 
         # build policy and value functions
-        # TODO: Refactor policy Pi, RNNActor to be recurrent
-        self.pi = RNNActor(obs_dim, act_dim, hidden_size,
-                           activation, act_limit).cuda()
-        self.q1 = RNNQFunction(
+        self.pi = LSTMActor(obs_dim, act_dim, hidden_size,
+                            activation, act_limit).cuda()
+        self.q1 = LSTMQFunction(
             obs_dim, act_dim, hidden_size, activation=activation).cuda()
-        self.q2 = RNNQFunction(
+        self.q2 = LSTMQFunction(
             obs_dim, act_dim, hidden_size, activation=activation).cuda()
 
     def act(self, obs, last_action, hidden, deterministic=False):
@@ -305,8 +305,8 @@ class GRUActor(nn.Module):
 
     def get_action(self, obs, last_action, hidden_in, deterministic=False):
         # increase 2 dims to match with training data
-        obs = torch.FloatTensor(obs).unsqueeze(0).unsqueeze(0).cuda()
-        last_action = torch.FloatTensor(
+        obs = torch.Tensor(obs).unsqueeze(0).unsqueeze(0).cuda()
+        last_action = torch.Tensor(
             last_action).unsqueeze(0).unsqueeze(0).cuda()
         mean, log_std, hidden_out = self.forward(
             obs, last_action, hidden_in)
@@ -426,7 +426,6 @@ class GRUActorCritic(nn.Module):
         act_limit = action_space.high[0]
 
         # build policy and value functions
-        # TODO: Refactor policy Pi, RNNActor to be recurrent
         self.pi = GRUActor(obs_dim, act_dim, hidden_size,
                            activation, act_limit).cuda()
         self.q1 = GRUQFunction(

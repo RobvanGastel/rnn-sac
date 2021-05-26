@@ -1,5 +1,5 @@
 # pwd
-# ~/Git/meta-learners
+# ~/Git/rnn-sac
 Y | conda create --name meta python=3.7
 conda activate meta
 
