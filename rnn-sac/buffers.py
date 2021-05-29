@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import random
+
 import core
 
 
@@ -56,6 +57,9 @@ class ReplayBufferGRU:
         self.buffer = []
         self.position = 0
 
+    def __len__(self):
+        return len(self.buffer)
+
     def store(self, last_act, obs, act, rew, next_obs, hid_in,
               hid_out, done):
         if len(self.buffer) < self.capacity:
@@ -98,8 +102,8 @@ class ReplayBufferGRU:
             rew=r_lst,
             done=d_lst)
 
-        return {k: torch.tensor(v).cuda()
-                if not isinstance(v, torch.Tensor) else v
+        return {k: torch.tensor(v, dtype=torch.float32).cuda()
+                if type(v) != tuple else v
                 for k, v in batch.items()}
 
 
@@ -111,6 +115,9 @@ class ReplayBufferLSTM:
         self.capacity = size
         self.buffer = []
         self.position = 0
+
+    def __len__(self):
+        return len(self.buffer)
 
     def store(self, last_act, obs, act, rew, next_obs, hid_in,
               hid_out, done):
@@ -164,6 +171,6 @@ class ReplayBufferLSTM:
             rew=r_lst,
             done=d_lst)
 
-        return {k: torch.tensor(v).cuda()
-                if not isinstance(v, torch.Tensor) else v
+        return {k: torch.tensor(v, dtype=torch.float32).cuda()
+                if type(v) != tuple else v
                 for k, v in batch.items()}
