@@ -6,7 +6,7 @@ import core
 
 
 class ReplayBuffer:
-    """A FIFO experience replay buffer for SAC agents.
+    """A FIFO experience replay buffer
     """
 
     def __init__(self, obs_dim, act_dim, size):
@@ -40,16 +40,16 @@ class ReplayBuffer:
                 for k, v in batch.items()}
 
 
-"""Replay buffer for agent with GRU network additionally storing previous
-action, initial input hidden state and output hidden state of the GRU.
-And each sample contains the whole episode instead of a single step.
+"""Replay buffer for agent with GRU/LSTM network additionally storing previous
+action, initial input hidden state and output hidden state of the RNN cell.
+And each sample contains the whole episode instead of a single transaction.
 'hidden_in' and 'hidden_out' are only the initial hidden state for each
-episode, for GRU initialization.
+episode, for RNN cell initialization.
 """
 
 
 class ReplayBufferGRU:
-    """A FIFO experience replay buffer for GRU policy SAC agents.
+    """A FIFO experience replay buffer for GRU policies.
     """
 
     def __init__(self, size):
@@ -108,7 +108,7 @@ class ReplayBufferGRU:
 
 
 class ReplayBufferLSTM:
-    """A FIFO experience replay buffer for LSTM policy SAC agents.
+    """A FIFO experience replay buffer for LSTM policies.
     """
 
     def __init__(self, size):
@@ -135,7 +135,6 @@ class ReplayBufferLSTM:
             ], [], [], [], [], [], [], [], [], []
         batch = random.sample(self.buffer, batch_size)
 
-        # TODO: Omit this for-loop by moving it to torch/np
         for sample in batch:
             (h_in, c_in), (h_out, c_out), state, action, last_action, \
                 reward, next_state, done = sample
@@ -174,3 +173,22 @@ class ReplayBufferLSTM:
         return {k: torch.tensor(v, dtype=torch.float32).cuda()
                 if type(v) != tuple else v
                 for k, v in batch.items()}
+
+
+class ReplayBufferHER:
+    """A Hindsight Experience Replay (HER) replay buffer
+       TODO: Implement to test meta-learning capabilities on meta-world
+    """
+
+    def __init__(self, size):
+        return NotImplementedError
+
+    def __len__(self):
+        return NotImplementedError
+
+    def store(self, last_act, obs, act, rew, next_obs, hid_in,
+              hid_out, done):
+        return NotImplementedError
+
+    def sample_batch(self, batch_size=32):
+        return NotImplementedError

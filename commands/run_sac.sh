@@ -19,12 +19,12 @@ python ./main.py "${args[@]}"
 args_lstm=(
     --env 'Pendulum-v0' \
     --rnn_cell 'LSTM' \
-    --hid 256 \
-    --lr 0.003 \
+    --hid 512 \
+    --lr 0.005 \
     --seed 42 \
     --epochs 30 \
     --alpha 0.2 \
-    --batch_size 5 \
+    --batch_size 10 \
     --exp_name 'lstm_sac_pendulum'
 )
 
@@ -35,12 +35,12 @@ python ./main.py "${args_lstm[@]}"
 args_gru=(
     --env 'Pendulum-v0' \
     --rnn_cell 'GRU' \
-    --hid 256 \
+    --hid 512 \
     --lr 0.003 \
     --seed 42 \
     --epochs 30 \
     --alpha 0.2 \
-    --batch_size 5 \
+    --batch_size 10 \
     --exp_name 'gru_sac_pendulum'
 )
 

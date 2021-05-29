@@ -34,11 +34,14 @@ if __name__ == "__main__":
     parser.add_argument('--exp_name', type=str, default='sac')
     args = parser.parse_args()
 
-    max_ep_len = gym.make('Pendulum-v0')._max_episode_steps
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
     torch.set_num_threads(torch.get_num_threads())
 
     if args.meta_learning:
+        # There is nomax episode length defined in meta-world,
+        # hence it's fixed to 500.
+        max_ep_len = 500
+
         rl2_sac(args.env,
                 actor_critic=core.GRUActorCritic if args.rnn_cell == 'GRU' else core.LSTMActorCritic,
                 rnn_cell=args.rnn_cell,
@@ -59,6 +62,8 @@ if __name__ == "__main__":
                 env_wrapper=None,  # TODO: Fix this env_wrapper
                 auto_entropy=args.auto_entropy)
     else:
+        max_ep_len = gym.make(args.env)._max_episode_steps
+
         if args.rnn_cell != 'MLP':
             rnn_sac(lambda: gym.make(args.env),
                     actor_critic=core.GRUActorCritic if args.rnn_cell == 'GRU' else core.LSTMActorCritic,
