@@ -13,10 +13,10 @@ from env_wrapper import NormalizedActions
 from utils.logx import EpochLogger
 
 
-def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
-        hidden_size=512, seed=0, steps_per_epoch=4000, epochs=100,
-        replay_size=int(1e6), gamma=0.99, polyak=0.995, lr=3e-4,
-        alpha=0., batch_size=1, start_steps=10000,
+def sac(env_fn, actor_critic=core.LSTMActorCritic, rnn_cell="GRU",
+        ac_kwargs=dict(), hidden_size=512, seed=0, steps_per_epoch=4000,
+        epochs=100, replay_size=int(1e6), gamma=0.99, polyak=0.995,
+        lr=3e-4, alpha=0., batch_size=1, start_steps=10000,
         update_after=1000, update_every=200, num_test_episodes=10,
         max_ep_len=200, logger_kwargs=dict(), save_freq=1,
         env_wrapper=NormalizedActions,
@@ -103,12 +103,12 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
 
     # Determine GRU or LSTM cell
     use_lstm = False
-    if isinstance(actor_critic, core.LSTMActorCritic):
+    if rnn_cell == 'LSTM':
         use_lstm = True
-    elif isinstance(actor_critic, core.GRUActorCritic):
+    elif rnn_cell == 'GRU':
         use_lstm = False
     else:
-        raise RuntimeError("ActorCritic chosen is not supported.")
+        raise RuntimeError("Actor Critic model chosen is not supported.")
 
     # Possibility of adding a wrapper, e.g. NormalizedActions
     if env_wrapper is not None:
@@ -235,7 +235,7 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
     # Set up optimizers for policy and q-function
     pi_optimizer = Adam(ac.pi.parameters(), lr=lr)
     q_optimizer = Adam(q_params, lr=lr)
-    # TODO: If exploring alpha loss
+    # If exploring alpha loss
     alpha_optimizer = Adam([log_alpha], lr=lr)
 
     # Set up model saving
@@ -281,20 +281,20 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
     def get_action(o, a2, hidden, deterministic=False):
         """Obtains actions from the correct actor
 
-        returns (action, hidden_in)
+           returns (action, hidden_in)
         """
 
         return ac.act(torch.as_tensor(o, dtype=torch.float32),
                       a2, hidden, deterministic)
 
     def test_agent():
-        """
+        """Evaluating the agent
         """
         hidden_out = (torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda(),
                       torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda()) \
             if use_lstm else torch.zeros([1, 1, hidden_size],
                                          dtype=torch.float).cuda()
-        a2 = env.action_space.sample()
+        a2 = test_env.action_space.sample()
         for _ in range(num_test_episodes):
             o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
             while not(d or (ep_len == max_ep_len)):
@@ -382,7 +382,6 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
 
         # Update handling
         if t >= update_after and t % update_every == 0:
-            # for j in range(update_every):
             batch = replay_buffer.sample_batch(batch_size)
             update(data=batch)
 
@@ -390,7 +389,6 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
         if (t+1) % steps_per_epoch == 0:
             epoch = (t+1) // steps_per_epoch
 
-            # print("End of epoch")
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
                 logger.save_state({'env': env}, None)
@@ -410,12 +408,14 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
             logger.log_tabular('EpLen', average_only=True)
             logger.log_tabular('TestEpLen', average_only=True)
             logger.log_tabular('TotalEnvInteracts', t)
-            # logger.log_tabular('Q1Vals', with_min_and_max=True)
-            # logger.log_tabular('Q2Vals', with_min_and_max=True)
-            # logger.log_tabular('LogPi', with_min_and_max=True)
-            # logger.log_tabular('LossPi', average_only=True)
-            # logger.log_tabular('LossQ', average_only=True)
+            logger.log_tabular('Q1Vals', with_min_and_max=True)
+            logger.log_tabular('Q2Vals', with_min_and_max=True)
+            logger.log_tabular('LogPi', with_min_and_max=True)
+            logger.log_tabular('LossPi', average_only=True)
+            logger.log_tabular('LossQ', average_only=True)
+
             logger.log_tabular('Time', time.time()-start_time)
             logger.dump_tabular()
+
     # if writer is not None:
     #     writer.close()

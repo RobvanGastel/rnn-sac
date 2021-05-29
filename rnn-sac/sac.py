@@ -13,7 +13,7 @@ from utils.logx import EpochLogger
 
 
 """The adjustments of the SAC algorithms are based on the official
-   implementation by SpinningUp OpenAI, 
+   implementation by SpinningUp OpenAI,
    https://github.com/openai/spinningup/.
 """
 
@@ -106,10 +106,6 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
     env, test_env = env_fn(), env_fn()
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.shape[0]
-
-    # Action limit for clamping: critically, assumes all dimensions share the
-    # same bound!
-    # act_limit = env.action_space.high[0]
 
     # Create actor-critic module and target networks
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
@@ -279,7 +275,7 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
 
         # Update handling
         if t >= update_after and t % update_every == 0:
-            for j in range(update_every):
+            for _ in range(update_every):
                 batch = replay_buffer.sample_batch(batch_size)
                 update(data=batch)
 
@@ -301,10 +297,11 @@ def sac(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(), seed=0,
             logger.log_tabular('EpLen', average_only=True)
             logger.log_tabular('TestEpLen', average_only=True)
             logger.log_tabular('TotalEnvInteracts', t)
-            # logger.log_tabular('Q1Vals', with_min_and_max=True)
-            # logger.log_tabular('Q2Vals', with_min_and_max=True)
-            # logger.log_tabular('LogPi', with_min_and_max=True)
-            # logger.log_tabular('LossPi', average_only=True)
-            # logger.log_tabular('LossQ', average_only=True)
+            logger.log_tabular('Q1Vals', with_min_and_max=True)
+            logger.log_tabular('Q2Vals', with_min_and_max=True)
+            logger.log_tabular('LogPi', with_min_and_max=True)
+            logger.log_tabular('LossPi', average_only=True)
+            logger.log_tabular('LossQ', average_only=True)
+
             logger.log_tabular('Time', time.time()-start_time)
             logger.dump_tabular()

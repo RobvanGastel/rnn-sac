@@ -6,6 +6,7 @@ import torch
 from torch.optim import Adam
 
 import gym
+import metaworld
 import random
 import time
 
@@ -15,19 +16,22 @@ from env_wrapper import NormalizedActions
 from utils.logx import EpochLogger
 
 
-def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
-        hidden_size=512, seed=0, steps_per_epoch=4000, epochs=100,
-        replay_size=int(1e6), gamma=0.99, polyak=0.995, lr=3e-4,
-        alpha=0., batch_size=1, start_steps=10000,
+def sac(meta_env, actor_critic=core.LSTMActorCritic, rnn_cell="GRU",
+        ac_kwargs=dict(), hidden_size=512, seed=0, steps_per_epoch=4000,
+        epochs=100, replay_size=int(1e6), gamma=0.99, polyak=0.995,
+        lr=3e-4, alpha=0., batch_size=1, start_steps=10000,
         update_after=1000, update_every=200, num_test_episodes=10,
-        max_ep_len=200, logger_kwargs=dict(), save_freq=1):
+        max_ep_len=200, logger_kwargs=dict(), save_freq=1,
+        env_wrapper=NormalizedActions,
+        auto_entropy=False):
     """
     Soft Actor-Critic (SAC) with Reccurent Neural Network (RNN)
     Policy and Actor utilizing the RL2 strategy on a distribution of task
     inorder to meta-learn.
     Args:
-        env_fn : A function which creates a copy of the environment.
-            The environment must satisfy the OpenAI Gym API.
+        meta_env: A meta-world environment ID to instantiate the environment.
+            The environment must satisfy the be contained in meta-world.
+            Currently, only for ML1.
         actor_critic: The constructor method for a PyTorch Module with an
             ``act`` method, a ``pi`` module, a ``q1`` module, and a ``q2``
             module. The ``act`` method and ``pi`` module should accept
@@ -97,36 +101,47 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
             the current policy and value function.
     """
 
-    # TODO: If alpha SGD is enabled for exploration
-    # target_entropy = -2
-    # reward_scale = 10.
-    # auto_entropy = True
-
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
-
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    envs = [NormalizedActions(gym.make(env_fn[0])),
-            NormalizedActions(gym.make(env_fn[1]))]
-    test_envs = [NormalizedActions(gym.make(env_fn[0])),
-                 NormalizedActions(gym.make(env_fn[1]))]
+    # Determine GRU or LSTM cell
+    use_lstm = False
+    if rnn_cell == 'LSTM':
+        use_lstm = True
+    elif rnn_cell == 'GRU':
+        use_lstm = False
+    else:
+        raise RuntimeError("Actor Critic model chosen is not supported.")
 
-    env, test_env = envs[0], test_envs[0]
-    obs_dim = env.observation_space.shape
-    act_dim = env.action_space.shape[0]
+    # Instantiate meta-world, environments for training and testing
+    ml1 = metaworld.ML1(meta_env)
+    env = ml1.train_classes[meta_env]()
+    task = random.choice(ml1.train_tasks)
+    env.set_task(task)
+
+    test_env = ml1.test_classes[meta_env]()
+    task = random.choice(ml1.test_tasks)
+    test_env.set_task(task)
 
     # Create actor-critic module and target networks
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
     ac_targ = copy.deepcopy(ac)
 
+    # TODO: Format these variables for alpha annealling.
+    # If alpha SGD is enabled for exploration, also add location
+    # of this value in the paper.
+    target_entropy = -2
+    alpha_constant = copy.deepcopy(alpha)
+
     # Take gradient of alpha to balance exploitation vs exploration
     # TODO: How does this work in meta-learning setting?
-    # Garage proposes different alphas for every task,
+    # Garage proposes different alphas for every task, (multi-task
+    # learning)
     # https://garage.readthedocs.io/en/latest/user/algo_mtsac.html
-    # log_alpha = torch.zeros(
-    #     1, dtype=torch.float32, requires_grad=True)
+    log_alpha = torch.zeros(
+        1, dtype=torch.float32, requires_grad=True, device="cuda")
 
     # Freeze target networks with respect to optimizers (only update via
     # polyak averaging)
@@ -137,10 +152,10 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
     q_params = itertools.chain(ac.q1.parameters(), ac.q2.parameters())
 
     # Experience buffer
-    # Note, this replay buffer stores entire trajectories
+    # Note, this replay buffer stores entire trajectories because of the
+    # recurrent networks
     replay_buffer = ReplayBufferLSTM(
-        obs_dim=obs_dim, act_dim=act_dim, hidden_dim=hidden_size,
-        size=replay_size, max_ep_len=max_ep_len)
+        size=replay_size) if use_lstm else ReplayBufferGRU(size=replay_size)
 
     # Count variables (protip: try to get a feel for how different size
     # networks behave!)
@@ -157,14 +172,13 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
         # Hidden layers of the LSTM layer
         hid_in, hid_out = data['hid_in'], data['hid_out']
 
-        d = torch.unsqueeze(d, -1)
-        r = torch.unsqueeze(r, -1)
-
         # TODO: Normalize the batch reward
         # normalize with batch mean and std; plus a small number to prevent
         # numerical problem
-        # r = reward_scale * \
+        # r = 10. * \
         #     (r - r.mean(dim=0)) / (r.std(dim=0) + 1e-6)
+        r = torch.unsqueeze(r, -1)
+        d = torch.unsqueeze(d, -1)
 
         q1, _ = ac.q1(o, a, a2, hid_in)
         q2, _ = ac.q2(o, a, a2, hid_in)
@@ -207,13 +221,17 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
         # TODO: Possibility of adding decaying alpha
         # Could apply alpha auto entropy as trade-off between
         # exploration (max entropy) and exploitation (max Q)
-        # if auto_entropy is True:
-        #     alpha_loss = -(log_alpha * (logp_pi +
-        #                                 target_entropy).detach()).mean()
-        #     alpha_optimizer.zero_grad()
-        #     alpha_loss.backward()
-        #     alpha_optimizer.step()
-        #     alpha = log_alpha.exp()
+        if auto_entropy is True:
+            alpha_loss = -(log_alpha * (logp_pi +
+                                        target_entropy).detach()).mean()
+            alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            alpha_optimizer.step()
+            alpha = log_alpha.exp()
+        else:
+            # keep a constant alpha
+            alpha = alpha_constant
+            alpha_loss = 0
 
         # Entropy-regularized policy loss
         loss_pi = (alpha * logp_pi - q_pi).mean()
@@ -226,8 +244,8 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
     # Set up optimizers for policy and q-function
     pi_optimizer = Adam(ac.pi.parameters(), lr=lr)
     q_optimizer = Adam(q_params, lr=lr)
-    # TODO: If exploring alpha loss
-    # alpha_optimizer = Adam([log_alpha], lr=lr)
+    # If exploring alpha loss
+    alpha_optimizer = Adam([log_alpha], lr=lr)
 
     # Set up model saving
     logger.setup_pytorch_saver(ac)
@@ -272,22 +290,30 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
                 p_targ.data.add_((1 - polyak) * p.data)
 
     def get_action(o, a2, hidden, deterministic=False):
-        # returns (action, hidden_in)
+        """Obtains actions from the correct actor
+
+        returns (action, hidden_in)
+        """
         return ac.act(torch.as_tensor(o, dtype=torch.float32),
                       a2, hidden, deterministic)
 
     def test_agent():
+        """Evaluating the agent
+        """
         # Recurrent shape
         hidden_out = (torch.zeros([1, 1, hidden_size],
                                   dtype=torch.float).cuda(),
                       torch.zeros([1, 1, hidden_size],
-                                  dtype=torch.float).cuda())
-        a2 = env.action_space.sample()
+                                  dtype=torch.float).cuda()) \
+            if use_lstm else torch.zeros([1, 1, hidden_size],
+                                         dtype=torch.float).cuda()
 
-        # Sample MDP from test envs, RL2
-        test_env = random.sample(test_envs, 1)[0]
+        test_env.set_task(random.choice(ml1.test_tasks))
+        a2 = test_env.action_space.sample()
 
-        for j in range(num_test_episodes):
+        for _ in range(num_test_episodes):
+            # Sample MDP from test distribution of environments, RL2
+            test_env.set_task(random.choice(ml1.test_tasks))
             o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
             while not(d or (ep_len == max_ep_len)):
                 hidden_in = hidden_out
@@ -298,6 +324,7 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
                 ep_ret += r
                 ep_len += 1
             logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
+        env.reset()
 
     # Variables for episodic replay buffer
     e_a, e_a2, e_o, e_o2, e_d, e_r = [], [], [], [], [], []
@@ -306,13 +333,15 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
     total_steps = steps_per_epoch * epochs
     start_time = time.time()
 
-    # Sample MDP from test envs, RL2
-    env = random.sample(envs, 1)[0]
+    # Sample MDP from distribution of environments, RL2
+    env.set_task(random.choice(ml1.train_tasks))
     o, ep_ret, ep_len = env.reset(), 0, 0
 
     # Recurrent shape
     hidden_out = (torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda(),
-                  torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda())
+                  torch.zeros([1, 1, hidden_size], dtype=torch.float).cuda()) \
+        if use_lstm else torch.zeros([1, 1, hidden_size],
+                                     dtype=torch.float).cuda()
     a2 = env.action_space.sample()
 
     # Main loop: collect experience in env and update/log each epoch
@@ -357,7 +386,6 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
 
         # End of trajectory handling
         if d or (ep_len == max_ep_len):
-            # print("End of trajectory reached")
             # Store experience to replay buffer
             e_a = np.asarray(e_a)
             e_a2 = np.asarray(e_a2)
@@ -371,15 +399,14 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
 
             logger.store(EpRet=ep_ret, EpLen=ep_len)
 
-            # Sample MDP from test envs, RL2
-            env = random.sample(envs, 1)[0]
+            # Sample MDP from distribution of environments, RL2
+            env.set_task(random.choice(ml1.train_tasks))
 
             o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Update handling
         if t >= update_after and t % update_every == 0 and \
                 len(replay_buffer) > batch_size:
-            # for j in range(update_every):
             batch = replay_buffer.sample_batch(batch_size)
             update(data=batch)
 
@@ -387,7 +414,6 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
         if (t+1) % steps_per_epoch == 0:
             epoch = (t+1) // steps_per_epoch
 
-            # print("End of epoch")
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
                 logger.save_state({'env': env}, None)
@@ -407,12 +433,13 @@ def sac(env_fn, actor_critic=core.LSTMActorCritic, ac_kwargs=dict(),
             logger.log_tabular('EpLen', average_only=True)
             logger.log_tabular('TestEpLen', average_only=True)
             logger.log_tabular('TotalEnvInteracts', t)
-            # logger.log_tabular('Q1Vals', with_min_and_max=True)
-            # logger.log_tabular('Q2Vals', with_min_and_max=True)
-            # logger.log_tabular('LogPi', with_min_and_max=True)
-            # logger.log_tabular('LossPi', average_only=True)
-            # logger.log_tabular('LossQ', average_only=True)
+            logger.log_tabular('Q1Vals', with_min_and_max=True)
+            logger.log_tabular('Q2Vals', with_min_and_max=True)
+            logger.log_tabular('LogPi', with_min_and_max=True)
+            logger.log_tabular('LossPi', average_only=True)
+            logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
             logger.dump_tabular()
+
     # if writer is not None:
     #     writer.close()

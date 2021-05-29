@@ -363,14 +363,14 @@ class EpochLogger(Logger):
 
         Args:
             key (string): The name of the diagnostic. If you are logging a
-                diagnostic whose state has previously been saved with 
+                diagnostic whose state has previously been saved with
                 ``store``, the key here has to match the key you used there.
 
             val: A value for the diagnostic. If you have previously saved
                 values for this key via ``store``, do *not* provide a ``val``
                 here.
 
-            with_min_and_max (bool): If true, log min and max values of the 
+            with_min_and_max (bool): If true, log min and max values of the
                 diagnostic over the epoch.
 
             average_only (bool): If true, do not log the standard deviation
