@@ -7,7 +7,10 @@ from rnn_sac.utils.run_utils import setup_logger_kwargs
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='CartPole-v1')
+    # parser.add_argument('--env', type=str, default='CartPole-v1')
+
+    parser.add_argument('--env', type=str, default='Pendulum-v0')
+
     parser.add_argument('--use_meta_learning', action='store_true')
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--lr', type=float, default=3e-3)
@@ -38,8 +41,7 @@ if __name__ == "__main__":
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 update_every=args.update_every,
-                reset_buffer=False,
                 hidden_size=args.hid,
-                exploration_sampling=args.exploration_sampling,)
+                exploration_sampling=args.exploration_sampling)
 
     agent.train_agent(env)

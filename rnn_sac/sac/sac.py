@@ -338,9 +338,11 @@ class SAC:
                     if self.global_steps > self.start_steps:
                         a, h_out = self.get_action(
                             o, a2, r2, h_in, greedy=False)
+                        a = [a]
                     else:
                         a = self.env.action_space.sample()
 
+                    print(a)
                     o2, r, d, _ = self.env.step(a)
                     ep_ret += r
                     ep_len += 1
