@@ -1,47 +1,31 @@
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate meta 
 
+# # Utilize GRU RNN cell
+# args=(
+#     --env 'Pendulum-v0' \
+#     --rnn_cell 'GRU' \
+#     --hid 512 \
+#     --lr 0.003 \
+#     --seed 42 \
+#     --epochs 30 \
+#     --alpha 0.2 \
+#     --batch_size 10 \
+#     --exp_name 'gru_sac_pendulum'
+# )
+
 # Default SAC implementation by OpenAI
 args=(
-    --env 'Pendulum-v0' \
-    --rnn_cell 'MLP' \
+    --env 'push-v2' \
+    --rnn_cell 'GRU' \
+    --meta_learning \
     --hid 256 \
     --lr 0.003 \
     --seed 42 \
-    --epochs 30 \
-    --batch_size 100 \
-    --exp_name 'mlp_sac_pendulum'
+    --epochs 100 \
+    --alpha 0.2 \
+    --batch_size 5 \
+    --exp_name 'rl2_gru_sac_push'
 )
 
 python ./main.py "${args[@]}"
-
-# Utilize LSTM RNN cell
-args_lstm=(
-    --env 'Pendulum-v0' \
-    --rnn_cell 'LSTM' \
-    --hid 512 \
-    --lr 0.005 \
-    --seed 42 \
-    --epochs 30 \
-    --alpha 0.2 \
-    --batch_size 10 \
-    --exp_name 'lstm_sac_pendulum'
-)
-
-python ./main.py "${args_lstm[@]}"
-
-
-# # Utilize GRU RNN cell
-args_gru=(
-    --env 'Pendulum-v0' \
-    --rnn_cell 'GRU' \
-    --hid 512 \
-    --lr 0.003 \
-    --seed 42 \
-    --epochs 30 \
-    --alpha 0.2 \
-    --batch_size 10 \
-    --exp_name 'gru_sac_pendulum'
-)
-
-python ./main.py "${args_gru[@]}"

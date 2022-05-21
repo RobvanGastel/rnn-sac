@@ -1,5 +1,5 @@
 # pwd
-# ~/Git/rnn-sac
+# ~/Git/rnn-agents
 Y | conda create --name meta python=3.7
 conda activate meta
 
@@ -24,7 +24,7 @@ pip install box2d-py
 # When running gridworld
 pip install gym_minigrid
 
-# For meta-SAC
+# For meta-agents
 pip install joblib
 Y | conda install -c anaconda mpi4py
 Y | conda install -c conda-forge seaborn==0.8.1

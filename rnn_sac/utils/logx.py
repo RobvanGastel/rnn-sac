@@ -16,8 +16,8 @@ import time
 import atexit
 import os
 import warnings
-from utils.mpi_tools import proc_id, mpi_statistics_scalar
-from utils.serialization_utils import convert_json
+from rnn_sac.utils.mpi_tools import proc_id, mpi_statistics_scalar
+from rnn_sac.utils.serialization_utils import convert_json
 
 color2num = dict(
     gray=30,
@@ -52,7 +52,7 @@ def restore_tf_graph(sess, fpath):
     """
     Loads graphs saved by Logger.
 
-    Will output a dictionary whose keys and values are from the 'inputs' 
+    Will output a dictionary whose keys and values are from the 'inputs'
     and 'outputs' dict you specified with logger.setup_tf_saver().
 
     Args:
@@ -61,7 +61,7 @@ def restore_tf_graph(sess, fpath):
 
     Returns:
         A dictionary mapping from keys to tensors in the computation graph
-        loaded from ``fpath``. 
+        loaded from ``fpath``.
     """
     tf.saved_model.loader.load(
         sess,
@@ -82,7 +82,7 @@ class Logger:
     """
     A general-purpose logger.
 
-    Makes it easy to save diagnostics, hyperparameter configurations, the 
+    Makes it easy to save diagnostics, hyperparameter configurations, the
     state of a training run, and the trained model.
     """
 
@@ -91,13 +91,13 @@ class Logger:
         Initialize a Logger.
 
         Args:
-            output_dir (string): A directory for saving results to. If 
+            output_dir (string): A directory for saving results to. If
                 ``None``, defaults to a temp directory of the form
                 ``/tmp/experiments/somerandomnumber``.
 
-            output_fname (string): Name for the tab-separated-value file 
-                containing metrics logged throughout a training run. 
-                Defaults to ``progress.txt``. 
+            output_fname (string): Name for the tab-separated-value file
+                containing metrics logged throughout a training run.
+                Defaults to ``progress.txt``.
 
             exp_name (string): Experiment name. If you run multiple training
                 runs and give them all the same ``exp_name``, the plotter
@@ -154,7 +154,7 @@ class Logger:
         Call this once at the top of your experiment, passing in all important
         config vars as a dict. This will serialize the config to JSON, while
         handling anything which can't be serialized in a graceful way (writing
-        as informative a string as possible). 
+        as informative a string as possible).
 
         Example use:
 
@@ -181,11 +181,11 @@ class Logger:
         To be clear: this is about saving *state*, not logging diagnostics.
         All diagnostic logging is separate from this function. This function
         will save whatever is in ``state_dict``---usually just a copy of the
-        environment---and the most recent parameters for the model you 
-        previously set up saving for with ``setup_tf_saver``. 
+        environment---and the most recent parameters for the model you
+        previously set up saving for with ``setup_tf_saver``.
 
         Call with any frequency you prefer. If you only want to maintain a
-        single state and overwrite it at each call with the most recent 
+        single state and overwrite it at each call with the most recent
         version, leave ``itr=None``. If you want to keep all of the states you
         save, provide unique (increasing) values for 'itr'.
 
@@ -232,7 +232,7 @@ class Logger:
     def _tf_simple_save(self, itr=None):
         """
         Uses simple_save to save a trained model, plus info to make it easy
-        to associated tensors to variables after restore. 
+        to associated tensors to variables after restore.
         """
         if proc_id() == 0:
             assert hasattr(self, 'tf_saver_elements'), \
@@ -252,7 +252,7 @@ class Logger:
         Set up easy model saving for a single PyTorch model.
 
         Because PyTorch saving and loading is especially painless, this is
-        very minimal; we just need references to whatever we would like to 
+        very minimal; we just need references to whatever we would like to
         pickle. This is integrated into the logger because the logger
         knows where the user would like to save information about this
         training run.
@@ -321,7 +321,7 @@ class EpochLogger(Logger):
     A variant of Logger tailored for tracking average values over epochs.
 
     Typical use case: there is some quantity which is calculated many times
-    throughout an epoch, and at the end of the epoch, you would like to 
+    throughout an epoch, and at the end of the epoch, you would like to
     report the average / std / min / max value of that quantity.
 
     With an EpochLogger, each time the quantity is calculated, you would
@@ -331,8 +331,8 @@ class EpochLogger(Logger):
 
         epoch_logger.store(NameOfQuantity=quantity_value)
 
-    to load it into the EpochLogger's state. Then at the end of the epoch, you 
-    would use 
+    to load it into the EpochLogger's state. Then at the end of the epoch, you
+    would use
 
     .. code-block:: python
 
@@ -349,7 +349,7 @@ class EpochLogger(Logger):
         """
         Save something into the epoch_logger's current state.
 
-        Provide an arbitrary number of keyword arguments with numerical 
+        Provide an arbitrary number of keyword arguments with numerical
         values.
         """
         for k, v in kwargs.items():
