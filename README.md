@@ -12,7 +12,6 @@ It should be noted that off-policy agents can't naively be combined with meta-le
 - [ ] Add option to use the a continuous policy
 - [ ] Extend SAC with the Probabilistic Context Variables (PEARL) for meta-learning
 
-<br/>
 
 ## References
 - Haarnoja, T., Zhou, A., Hartikainen, K., Tucker, G., Ha, S., Tan, J., Kumar, V., Zhu, H., Gupta, A., Abbeel, P., & Levine, S. (2019). Soft Actor-Critic Algorithms and Applications (arXiv:1812.05905). arXiv. https://doi.org/10.48550/arXiv.1812.05905
