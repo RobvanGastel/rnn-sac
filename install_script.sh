@@ -1,22 +1,6 @@
 # pwd
-# ~/Git/rnn-agents
-Y | conda create --name meta python=3.7
-conda activate meta
-
-cd ..
-rm -rf garage
-git clone https://github.com/rlworkgroup/garage.git
-cd garage
-pip install -e . # ['dev','all'], given by the devs but doesn't work
-
-cd ..
-rm -rf metaworld
-git clone https://github.com/rlworkgroup/metaworld.git
-cd metaworld
-pip install -e . 
-
-# pip dependencies
-# pip install bsuite
+Y | conda create --name rl python=3.7
+conda activate rl
 
 # In the correct dir
 pip install box2d-py

@@ -15,8 +15,7 @@ def count_vars(module):
 
 
 class CategoricalPolicy(nn.Module):
-    def __init__(self, act_dim, hidden_size=64,
-                 activation=nn.ReLU()):
+    def __init__(self, act_dim, hidden_size=64, activation=nn.ReLU()):
         super().__init__()
 
         self.activation = activation
@@ -51,8 +50,7 @@ class GaussianPolicy(nn.Module):
     LOG_STD_MIN = -20
     eps = 1e-8
 
-    def __init__(self, act_dim, act_limit, hidden_size=64,
-                 activation=nn.ReLU()):
+    def __init__(self, act_dim, act_limit, hidden_size=64, activation=nn.ReLU()):
         super().__init__()
         # TODO:
         # act_limit = 2
@@ -69,8 +67,7 @@ class GaussianPolicy(nn.Module):
 
         mu = self.mu_layer(mem)
         log_std = self.log_std_layer(mem)
-        log_std = torch.clamp(
-            log_std, min=self.LOG_STD_MIN, max=self.LOG_STD_MAX)
+        log_std = torch.clamp(log_std, min=self.LOG_STD_MIN, max=self.LOG_STD_MAX)
 
         std = log_std.exp()
         return mu, std
@@ -86,7 +83,7 @@ class GaussianPolicy(nn.Module):
 
         log_action_probs = pi_dist.log_prob(pi_action).sum(axis=-1)
         log_action_probs -= (
-            2*(np.log(2) - pi_action - F.softplus(-2*pi_action))
+            2 * (np.log(2) - pi_action - F.softplus(-2 * pi_action))
         ).sum(axis=1)
 
         pi_action = torch.tanh(pi_action)
@@ -102,7 +99,7 @@ class GaussianPolicy(nn.Module):
 
         log_action_probs = pi_dist.log_prob(pi_action).sum(axis=-1)
         log_action_probs -= (
-            2*(np.log(2) - pi_action - F.softplus(-2*pi_action))
+            2 * (np.log(2) - pi_action - F.softplus(-2 * pi_action))
         ).sum(axis=1)
 
         pi_action = torch.tanh(pi_action)
@@ -114,8 +111,7 @@ class GaussianPolicy(nn.Module):
 
 
 class Memory(nn.Module):
-    def __init__(self, obs_dim, act_dim, device,
-                 hidden_size=64, activation=nn.ReLU()):
+    def __init__(self, obs_dim, act_dim, device, hidden_size=64, activation=nn.ReLU()):
         super().__init__()
 
         self.activation = activation
@@ -124,29 +120,19 @@ class Memory(nn.Module):
 
         self.linear1 = nn.Linear(obs_dim, hidden_size)
         # +1 for the reward
-        self.gru = nn.GRU(hidden_size+act_dim+1,
-                          hidden_size,
-                          batch_first=True)
+        self.gru = nn.GRU(hidden_size + act_dim + 1, hidden_size, batch_first=True)
 
     def _one_hot(self, act):
         print(self.act_dim, act)
         return torch.eye(self.act_dim)[act.long(), :].to(self.device)
 
-    def forward(self, obs, prev_act, prev_rew, hid_in,
-                training=False):
+    def forward(self, obs, prev_act, prev_rew, hid_in, training=False):
 
         # act_enc = self._one_hot(prev_act)
         act_enc = torch.tensor(prev_act)
         obs_enc = self.activation(self.linear1(obs))
 
-        gru_input = torch.cat(
-            [
-                obs_enc,
-                act_enc,
-                prev_rew
-            ],
-            dim=-1,
-        )
+        gru_input = torch.cat([obs_enc, act_enc, prev_rew], dim=-1,)
 
         # Input rnn: (batch size, sequence length, features)
         if training:
@@ -162,8 +148,7 @@ class Memory(nn.Module):
 
 
 class QNetwork(nn.Module):
-    def __init__(self, obs_dim, act_dim, hidden_size=64,
-                 activation=nn.ReLU()):
+    def __init__(self, obs_dim, act_dim, hidden_size=64, activation=nn.ReLU()):
         super().__init__()
 
         self.activation = activation
@@ -178,8 +163,14 @@ class QNetwork(nn.Module):
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, observation_space, action_space, device,
-                 hidden_size=[256, 256], activation=nn.ReLU()):
+    def __init__(
+        self,
+        observation_space,
+        action_space,
+        device,
+        hidden_size=[256, 256],
+        activation=nn.ReLU(),
+    ):
         super().__init__()
 
         obs_dim = observation_space.shape[0]
@@ -190,31 +181,31 @@ class ActorCritic(nn.Module):
         act_limit = action_space.high[0]
 
         self.memory = Memory(
-            obs_dim, act_dim, device, hidden_size[0], activation=activation)
+            obs_dim, act_dim, device, hidden_size[0], activation=activation
+        )
         # self.pi = CategoricalPolicy(
         #     act_dim, hidden_size=hidden_size[0], activation=activation)
-        self.pi = GaussianPolicy(act_dim, act_limit, hidden_size[0],
-                                 activation=activation)
+        self.pi = GaussianPolicy(
+            act_dim, act_limit, hidden_size[0], activation=activation
+        )
 
-        self.q1 = QNetwork(obs_dim, act_dim,
-                           hidden_size=hidden_size[0],
-                           activation=activation)
-        self.q2 = QNetwork(obs_dim, act_dim,
-                           hidden_size=hidden_size[0],
-                           activation=activation)
+        self.q1 = QNetwork(
+            obs_dim, act_dim, hidden_size=hidden_size[0], activation=activation
+        )
+        self.q2 = QNetwork(
+            obs_dim, act_dim, hidden_size=hidden_size[0], activation=activation
+        )
 
     def act(self, obs, prev_act, prev_rew, hid_in, training=False):
         with torch.no_grad():
-            mem_emb, hid_out = self.memory(
-                obs, prev_act, prev_rew, hid_in, training)
+            mem_emb, hid_out = self.memory(obs, prev_act, prev_rew, hid_in, training)
             action = self.pi.act(mem_emb)
 
         return action.item(), hid_out
 
     def explore(self, obs, prev_act, prev_rew, hid_in, training=False):
         with torch.no_grad():
-            mem_emb, hid_out = self.memory(
-                obs, prev_act, prev_rew, hid_in, training)
+            mem_emb, hid_out = self.memory(obs, prev_act, prev_rew, hid_in, training)
             print(mem_emb.shape)
             _, action, _ = self.pi.sample(mem_emb)
         print(action)

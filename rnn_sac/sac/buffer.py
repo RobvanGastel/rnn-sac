@@ -14,8 +14,16 @@ class EpisodicBuffer:
     interacting with the environment
     """
 
-    def __init__(self, obs_dim, act_dim, size, hidden_size, device,
-                 use_sac=False, use_exploration_sampling=False):
+    def __init__(
+        self,
+        obs_dim,
+        act_dim,
+        size,
+        hidden_size,
+        device,
+        use_sac=False,
+        use_exploration_sampling=False,
+    ):
 
         # Pick sampling episodes or time-steps
         self.exploration_batch = np.array([])
@@ -28,18 +36,14 @@ class EpisodicBuffer:
         self.device = device
         self.size = size
 
-        self.obs_buf = np.zeros(combined_shape(
-            size, obs_dim), dtype=np.float32)
-        self.next_obs_buf = np.zeros(combined_shape(
-            size, obs_dim), dtype=np.float32)
-        self.act_buf = np.zeros(combined_shape(
-            size, act_dim), dtype=np.float32)
+        self.obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
+        self.next_obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
+        self.act_buf = np.zeros(combined_shape(size, act_dim), dtype=np.float32)
         self.rew_buf = np.zeros(size, dtype=np.float32)
         self.done_buf = np.zeros(size, dtype=np.float32)
 
         # RL^2 variables
-        self.prev_act_buf = np.zeros(
-            combined_shape(size, act_dim), dtype=np.float32)
+        self.prev_act_buf = np.zeros(combined_shape(size, act_dim), dtype=np.float32)
         self.prev_rew_buf = np.zeros(size, dtype=np.float32)
 
         if use_sac:
@@ -73,26 +77,29 @@ class EpisodicBuffer:
         else:
             self.hxs_buf[self.ptr] = hidden
 
-        # self.ptr += 1
-        self.ptr = (self.ptr+1) % self.max_size
-        self.size = min(self.size+1, self.max_size)
+        self.ptr = (self.ptr + 1) % self.max_size
+        self.size = min(self.size + 1, self.max_size)
 
     def finish_path_sac(self):
 
         path_slice = slice(self.path_start_idx, self.ptr)
 
         # Exploitation batch
-        data = dict(obs=self.obs_buf[path_slice],
-                    obs2=self.next_obs_buf[path_slice],
-                    act=self.act_buf[path_slice],
-                    rew=self.rew_buf[path_slice],
-                    done=self.done_buf[path_slice],
-                    prev_act=self.prev_act_buf[path_slice],
-                    prev_rew=self.prev_rew_buf[path_slice],
-                    hid=self.hxs_buf[self.path_start_idx],
-                    hid_out=self.next_hxs_buf[self.path_start_idx])
-        data = {k: torch.as_tensor(v, dtype=torch.float32).to(self.device)
-                for k, v in data.items()}
+        data = dict(
+            obs=self.obs_buf[path_slice],
+            obs2=self.next_obs_buf[path_slice],
+            act=self.act_buf[path_slice],
+            rew=self.rew_buf[path_slice],
+            done=self.done_buf[path_slice],
+            prev_act=self.prev_act_buf[path_slice],
+            prev_rew=self.prev_rew_buf[path_slice],
+            hid=self.hxs_buf[self.path_start_idx],
+            hid_out=self.next_hxs_buf[self.path_start_idx],
+        )
+        data = {
+            k: torch.as_tensor(v, dtype=torch.float32).to(self.device)
+            for k, v in data.items()
+        }
         self.exploitation_batch = np.append(self.exploitation_batch, data)
 
         if self.use_exploration_sampling:
@@ -100,17 +107,21 @@ class EpisodicBuffer:
             # set the return of the episode to 0
             rews_zero = np.zeros_like(self.rew_buf[path_slice])
 
-            data = dict(obs=self.obs_buf[path_slice],
-                        obs2=self.next_obs_buf[path_slice],
-                        act=self.act_buf[path_slice],
-                        rew=rews_zero,
-                        done=self.done_buf[path_slice],
-                        prev_act=self.prev_act_buf[path_slice],
-                        prev_rew=self.prev_rew_buf[path_slice],
-                        hid=self.hxs_buf[self.path_start_idx],
-                        hid_out=self.next_hxs_buf[self.path_start_idx])
-            data = {k: torch.as_tensor(v, dtype=torch.float32).to(self.device)
-                    for k, v in data.items()}
+            data = dict(
+                obs=self.obs_buf[path_slice],
+                obs2=self.next_obs_buf[path_slice],
+                act=self.act_buf[path_slice],
+                rew=rews_zero,
+                done=self.done_buf[path_slice],
+                prev_act=self.prev_act_buf[path_slice],
+                prev_rew=self.prev_rew_buf[path_slice],
+                hid=self.hxs_buf[self.path_start_idx],
+                hid_out=self.next_hxs_buf[self.path_start_idx],
+            )
+            data = {
+                k: torch.as_tensor(v, dtype=torch.float32).to(self.device)
+                for k, v in data.items()
+            }
             self.exploration_batch = np.append(self.exploration_batch, data)
 
         self.path_start_idx = self.ptr
@@ -125,17 +136,21 @@ class EpisodicBuffer:
         path_slice = slice(self.path_start_idx, self.ptr)
         rews_zero = np.zeros_like(self.rew_buf[path_slice])
 
-        data = dict(obs=self.obs_buf[path_slice],
-                    obs2=self.next_obs_buf[path_slice],
-                    act=self.act_buf[path_slice],
-                    rew=self.rew_buf[path_slice],
-                    done=self.done_buf[path_slice],
-                    prev_act=self.prev_act_buf[path_slice],
-                    prev_rew=self.prev_rew_buf[path_slice],
-                    hidden=self.hxs_buf[self.path_start_idx])
+        data = dict(
+            obs=self.obs_buf[path_slice],
+            obs2=self.next_obs_buf[path_slice],
+            act=self.act_buf[path_slice],
+            rew=self.rew_buf[path_slice],
+            done=self.done_buf[path_slice],
+            prev_act=self.prev_act_buf[path_slice],
+            prev_rew=self.prev_rew_buf[path_slice],
+            hidden=self.hxs_buf[self.path_start_idx],
+        )
 
-        data = {k: torch.as_tensor(v, dtype=torch.float32).to(self.device)
-                for k, v in data.items()}
+        data = {
+            k: torch.as_tensor(v, dtype=torch.float32).to(self.device)
+            for k, v in data.items()
+        }
         self.exploitation_batch = np.append(self.exploitation_batch, data)
 
         if self.use_exploration_sampling:
@@ -143,16 +158,20 @@ class EpisodicBuffer:
             # set the return of the episode to 0
             rews_zero = np.zeros_like(self.rew_buf[path_slice])
 
-            data = dict(obs=self.obs_buf[path_slice],
-                        obs2=self.next_obs_buf[path_slice],
-                        act=self.act_buf[path_slice],
-                        rew=rews_zero,
-                        done=self.done_buf[path_slice],
-                        prev_act=self.prev_act_buf[path_slice],
-                        prev_rew=self.prev_rew_buf[path_slice],
-                        hidden=self.hxs_buf[self.path_start_idx])
-            data = {k: torch.as_tensor(v, dtype=torch.float32).to(self.device)
-                    for k, v in data.items()}
+            data = dict(
+                obs=self.obs_buf[path_slice],
+                obs2=self.next_obs_buf[path_slice],
+                act=self.act_buf[path_slice],
+                rew=rews_zero,
+                done=self.done_buf[path_slice],
+                prev_act=self.prev_act_buf[path_slice],
+                prev_rew=self.prev_rew_buf[path_slice],
+                hidden=self.hxs_buf[self.path_start_idx],
+            )
+            data = {
+                k: torch.as_tensor(v, dtype=torch.float32).to(self.device)
+                for k, v in data.items()
+            }
             self.exploration_batch = np.append(self.exploration_batch, data)
 
         self.path_start_idx = self.ptr
@@ -170,13 +189,12 @@ class EpisodicBuffer:
             # use_exploration_sampling
             if batch_size is not None:
                 k = batch_size
-                p = int(k*p_exploration)
+                p = int(k * p_exploration)
 
                 # p explore-rollouts
                 explore_idx = np.random.choice(
-                    np.arange(len(self.exploration_batch)),
-                    p,
-                    replace=False)
+                    np.arange(len(self.exploration_batch)), p, replace=False
+                )
 
                 b_mask = np.ones_like(self.exploration_batch, dtype=bool)
                 # Exclude p explore rollouts
@@ -187,18 +205,20 @@ class EpisodicBuffer:
                 exploit = self.exploitation_batch[b_mask]
 
                 exploit = np.random.choice(
-                    self.exploitation_batch, k-p, replace=False)
+                    self.exploitation_batch, k - p, replace=False
+                )
 
                 batch = [*explore, *exploit]
                 np.random.shuffle(batch)
                 return batch
 
             k = len(self.exploitation_batch)
-            p = int(k*p_exploration)
+            p = int(k * p_exploration)
 
             # p explore-rollouts
             explore_idx = np.random.choice(
-                np.arange(len(self.exploration_batch)), p, replace=False)
+                np.arange(len(self.exploration_batch)), p, replace=False
+            )
 
             b_mask = np.ones_like(self.exploration_batch, dtype=bool)
             # Exclude p explore rollouts

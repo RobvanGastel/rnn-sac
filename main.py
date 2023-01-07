@@ -8,7 +8,6 @@ from rnn_sac.utils.run_utils import setup_logger_kwargs
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # parser.add_argument('--env', type=str, default='CartPole-v1')
-
     parser.add_argument('--env', type=str, default='Pendulum-v0')
 
     parser.add_argument('--use_meta_learning', action='store_true')
